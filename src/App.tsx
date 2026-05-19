@@ -6,10 +6,13 @@ import WorkoutHistory from '@/pages/WorkoutHistory';
 import ExerciseDetail from '@/pages/ExerciseDetail';
 import BodyStats from '@/pages/BodyStats';
 import StyleGuide from '@/pages/StyleGuide';
+import TemplateEditor from '@/pages/TemplateEditor';
 
 function AppRoutes() {
   const location = useLocation();
-  const isWorkoutActive = location.pathname.startsWith('/workout/');
+  const isWorkoutActive =
+    location.pathname.startsWith('/workout/') ||
+    location.pathname.startsWith('/template/');
 
   return (
     <>
@@ -20,6 +23,7 @@ function AppRoutes() {
         <Route path="/exercise/:exerciseId"   element={<ExerciseDetail />} />
         <Route path="/stats"                  element={<BodyStats />} />
         <Route path="/style"                  element={<StyleGuide />} />
+        <Route path="/template/:id/edit"      element={<TemplateEditor />} />
       </Routes>
       {!isWorkoutActive && <BottomNav />}
     </>

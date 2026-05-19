@@ -1,19 +1,14 @@
 import { useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
+import { PencilSimple } from '@phosphor-icons/react';
 import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
-import { templates } from '@/data/templates';
+import { SkeletonCard } from '@/components/shared/SkeletonCard';
+import { useTemplates, defaultTemplates } from '@/hooks/useTemplates';
 import { db } from '@/data/db';
 import type { WorkoutTemplate } from '@/types';
 
 const DAY_LABEL_ORDER = ['push', 'pull', 'legs', 'core'] as const;
-
-const CARD_COLORS: Record<string, string> = {
-  push: '#FF4D00',
-  pull: '#FF4D00',
-  legs: '#FF4D00',
-  core: '#FF4D00',
-};
 
 function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat('en-US', {
@@ -49,6 +44,16 @@ function DayCard({ template, lastSessionDate }: DayCardProps) {
         minHeight: '9rem',
       }}
     >
+      {/* Edit icon */}
+      <button
+        onClick={(e) => { e.stopPropagation(); navigate(`/template/${template.id}/edit`); }}
+        className="absolute top-3 right-3"
+        style={{ color: 'var(--color-text-faint)' }}
+        aria-label={`Edit ${template.name}`}
+      >
+        <PencilSimple size={16} />
+      </button>
+
       {/* Day label */}
       <span
         className="font-display leading-none"
@@ -80,11 +85,11 @@ function DayCard({ template, lastSessionDate }: DayCardProps) {
       {/* Start button */}
       <button
         onClick={() => navigate(`/workout/${template.id}`)}
-        className="mt-auto self-start font-body font-medium transition-colors"
+        className="mt-auto self-start font-body font-medium"
         style={{
           fontSize: 'var(--text-meta)',
-          color: CARD_COLORS[template.category],
-          border: `1px solid ${CARD_COLORS[template.category]}`,
+          color: 'var(--color-accent)',
+          border: '1px solid var(--color-accent)',
           borderRadius: 'var(--radius-sm)',
           padding: '0.35rem 0.85rem',
           background: 'transparent',
@@ -102,6 +107,10 @@ export default function Home() {
   const isSunday = new Date().getDay() === 0;
   const navigate = useNavigate();
 
+  // Live from Dexie; fallback to static while loading
+  const liveTemplates = useTemplates();
+  const templates = liveTemplates ?? defaultTemplates;
+
   const lastSessions = useLiveQuery(async () => {
     const results: Record<string, number> = {};
     for (const template of templates) {
@@ -115,7 +124,7 @@ export default function Home() {
       }
     }
     return results;
-  }, []);
+  }, [templates]);
 
   const orderedTemplates = DAY_LABEL_ORDER
     .map((cat) => templates.find((t) => t.category === cat))
@@ -123,27 +132,32 @@ export default function Home() {
 
   return (
     <PageShell>
-      <Header
-        subtitle={formatToday()}
-      />
+      <Header subtitle={formatToday()} />
 
       <main className="flex flex-col gap-3 p-4">
         {/* Day cards grid */}
-        <div className="grid grid-cols-2 gap-3">
-          {orderedTemplates.map((template) => (
-            <DayCard
-              key={template.id}
-              template={template}
-              lastSessionDate={lastSessions?.[template.id]}
-            />
-          ))}
-        </div>
+        {liveTemplates === undefined ? (
+          // Loading skeletons
+          <div className="grid grid-cols-2 gap-3">
+            {[0, 1, 2, 3].map((i) => <SkeletonCard key={i} height="9rem" />)}
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            {orderedTemplates.map((template) => (
+              <DayCard
+                key={template.id}
+                template={template}
+                lastSessionDate={lastSessions?.[template.id]}
+              />
+            ))}
+          </div>
+        )}
 
         {/* Sunday body stats CTA */}
         {isSunday && (
           <button
             onClick={() => navigate('/stats')}
-            className="w-full py-3 font-body font-medium transition-colors"
+            className="w-full py-3 font-body font-medium"
             style={{
               fontSize: 'var(--text-meta)',
               color: 'var(--color-text-muted)',

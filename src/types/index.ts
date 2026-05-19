@@ -72,6 +72,22 @@ export type BodyStat = {
   notes?: string;
 };
 
+// ─── Warm-up & Stretch Types ─────────────────────────────────────
+
+export type WarmupItem = {
+  id: string;
+  name: string;
+  reps: string;   // display string: "10/leg", "60 seconds", "8 reps"
+  note?: string;
+};
+
+export type StretchItem = {
+  id: string;
+  name: string;
+  duration: string; // display string: "60s/side", "30s/leg"
+  note?: string;
+};
+
 // ─── UI / Store Types ────────────────────────────────────────────
 
 export type ActiveSet = {
