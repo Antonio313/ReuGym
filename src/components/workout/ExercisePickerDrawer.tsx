@@ -1,5 +1,7 @@
+import { useNavigate } from 'react-router-dom';
+import { Plus } from '@phosphor-icons/react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
-import { exercises } from '@/data/exercises';
+import { useExercises } from '@/hooks/useExercises';
 import type { ExerciseCategory } from '@/types';
 
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
@@ -16,10 +18,19 @@ type Props = {
   onClose: () => void;
   onSelect: (exerciseId: string) => void;
   excludeIds: string[];
+  returnTo?: string; // passed to create page so it knows where to come back
 };
 
-export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds }: Props) {
+export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, returnTo }: Props) {
+  const navigate = useNavigate();
+  const allExercises = useExercises();
   const excludeSet = new Set(excludeIds);
+
+  const handleCreate = () => {
+    onClose();
+    const params = returnTo ? `?returnTo=${encodeURIComponent(returnTo)}` : '';
+    navigate(`/exercise/new${params}`);
+  };
 
   return (
     <Drawer open={open} onClose={onClose}>
@@ -36,8 +47,27 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds }: Pr
         </DrawerHeader>
 
         <div className="overflow-y-auto px-4 pb-8">
+          {/* Create new exercise shortcut */}
+          <button
+            onClick={handleCreate}
+            className="flex w-full items-center gap-2 py-3 mb-4"
+            style={{
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--color-accent-dim)',
+              border: '1px solid var(--color-accent)',
+              padding: '0.75rem 1rem',
+              color: 'var(--color-accent)',
+            }}
+          >
+            <Plus size={16} weight="bold" />
+            <span className="font-body font-medium" style={{ fontSize: 'var(--text-body)' }}>
+              Create new exercise…
+            </span>
+          </button>
+
           {CATEGORY_ORDER.map((cat) => {
-            const catExercises = exercises.filter((e) => e.category === cat);
+            const catExercises = allExercises.filter((e) => e.category === cat);
+            if (catExercises.length === 0) return null;
             return (
               <div key={cat} className="mb-6">
                 <p
@@ -76,6 +106,7 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds }: Pr
                         >
                           {ex.defaultRepRange[0]}–{ex.defaultRepRange[1]} reps
                           {ex.isBodyweight ? ' · Bodyweight' : ` · ${ex.startingWeightKg}kg start`}
+                          {ex.notes ? ` · ${ex.notes}` : ''}
                         </span>
                       </span>
                       {already && (

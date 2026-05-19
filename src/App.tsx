@@ -7,12 +7,14 @@ import ExerciseDetail from '@/pages/ExerciseDetail';
 import BodyStats from '@/pages/BodyStats';
 import StyleGuide from '@/pages/StyleGuide';
 import TemplateEditor from '@/pages/TemplateEditor';
+import CreateExercise from '@/pages/CreateExercise';
 
 function AppRoutes() {
   const location = useLocation();
   const isWorkoutActive =
     location.pathname.startsWith('/workout/') ||
-    location.pathname.startsWith('/template/');
+    location.pathname.startsWith('/template/') ||
+    location.pathname.startsWith('/exercise/new');
 
   return (
     <>
@@ -24,6 +26,7 @@ function AppRoutes() {
         <Route path="/stats"                  element={<BodyStats />} />
         <Route path="/style"                  element={<StyleGuide />} />
         <Route path="/template/:id/edit"      element={<TemplateEditor />} />
+        <Route path="/exercise/new"           element={<CreateExercise />} />
       </Routes>
       {!isWorkoutActive && <BottomNav />}
     </>

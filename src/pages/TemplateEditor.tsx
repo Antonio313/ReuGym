@@ -3,14 +3,17 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, ArrowUp, ArrowDown, Trash, Plus } from '@phosphor-icons/react';
 import { ExercisePickerDrawer } from '@/components/workout/ExercisePickerDrawer';
 import { useTemplate, saveTemplate, resetTemplate } from '@/hooks/useTemplates';
+import { useExercises } from '@/hooks/useExercises';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
-import { exerciseMap } from '@/data/exercises';
 import type { TemplateExercise, WorkoutTemplate } from '@/types';
 
 export default function TemplateEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [pickerOpen, setPickerOpen] = useState(false);
+
+  const allExercises = useExercises();
+  const exerciseMap = new Map(allExercises.map((e) => [e.id, e]));
 
   const liveTemplate = useTemplate(id ?? '');
   const template = liveTemplate ?? (id ? defaultTemplateMap.get(id) : undefined);
@@ -183,6 +186,7 @@ export default function TemplateEditor() {
         onClose={() => setPickerOpen(false)}
         onSelect={addExercise}
         excludeIds={currentIds}
+        returnTo={`/template/${template.id}/edit`}
       />
     </div>
   );
