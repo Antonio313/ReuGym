@@ -114,13 +114,14 @@ export default function Home() {
   const lastSessions = useLiveQuery(async () => {
     const results: Record<string, number> = {};
     for (const template of templates) {
-      const session = await db.sessions
+      const sessions = await db.sessions
         .where('templateId')
         .equals(template.id)
-        .and((s) => s.completedAt !== undefined)
-        .last();
-      if (session?.completedAt) {
-        results[template.id] = session.completedAt;
+        .filter((s) => s.completedAt != null)
+        .sortBy('startedAt');
+      const last = sessions[sessions.length - 1];
+      if (last?.completedAt) {
+        results[template.id] = last.completedAt;
       }
     }
     return results;

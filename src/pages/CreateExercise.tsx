@@ -174,7 +174,7 @@ export default function CreateExercise() {
         className="flex items-center gap-3 px-4 sticky top-0 z-40"
         style={{ height: 'var(--header-height)', borderBottom: 'var(--border-thin)', background: 'var(--color-bg)' }}
       >
-        <button onClick={() => navigate(returnTo ?? -1 as never)} style={{ color: 'var(--color-text-muted)' }}>
+        <button onClick={() => navigate(-1)} style={{ color: 'var(--color-text-muted)' }}>
           <ArrowLeft size={22} />
         </button>
         <span className="font-display" style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)' }}>

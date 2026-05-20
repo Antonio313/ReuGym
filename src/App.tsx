@@ -4,6 +4,7 @@ import Home from '@/pages/Home';
 import WorkoutActive from '@/pages/WorkoutActive';
 import WorkoutHistory from '@/pages/WorkoutHistory';
 import ExerciseDetail from '@/pages/ExerciseDetail';
+import ExerciseLibrary from '@/pages/ExerciseLibrary';
 import BodyStats from '@/pages/BodyStats';
 import StyleGuide from '@/pages/StyleGuide';
 import TemplateEditor from '@/pages/TemplateEditor';
@@ -22,6 +23,7 @@ function AppRoutes() {
         <Route path="/"                       element={<Home />} />
         <Route path="/workout/:templateId"    element={<WorkoutActive />} />
         <Route path="/history"                element={<WorkoutHistory />} />
+        <Route path="/exercises"              element={<ExerciseLibrary />} />
         <Route path="/exercise/:exerciseId"   element={<ExerciseDetail />} />
         <Route path="/stats"                  element={<BodyStats />} />
         <Route path="/style"                  element={<StyleGuide />} />

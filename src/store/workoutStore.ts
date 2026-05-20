@@ -16,6 +16,7 @@ type WorkoutStore = {
   startSession: (template: WorkoutTemplate, sessionId: string) => void;
   logSet: (set: ActiveSet) => void;
   nextExercise: () => void;
+  incrementSetNumber: () => void;
   startRestTimer: (seconds: number) => void;
   tickRestTimer: () => void;
   skipRestTimer: () => void;
@@ -52,6 +53,8 @@ export const useWorkoutStore = create<WorkoutStore>((set) => ({
     currentExerciseIndex: state.currentExerciseIndex + 1,
     currentSetNumber: 1,
   })),
+
+  incrementSetNumber: () => set((state) => ({ currentSetNumber: state.currentSetNumber + 1 })),
 
   startRestTimer: (seconds) => set({
     restSecondsRemaining: seconds,

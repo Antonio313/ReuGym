@@ -1,10 +1,11 @@
 import { NavLink } from 'react-router-dom';
-import { House, ClockCounterClockwise, ChartBar } from '@phosphor-icons/react';
+import { House, ClockCounterClockwise, Barbell, ChartBar } from '@phosphor-icons/react';
 
 const navItems = [
-  { to: '/',        label: 'Home',    Icon: House },
-  { to: '/history', label: 'History', Icon: ClockCounterClockwise },
-  { to: '/stats',   label: 'Stats',   Icon: ChartBar },
+  { to: '/',          label: 'Home',      Icon: House },
+  { to: '/history',   label: 'History',   Icon: ClockCounterClockwise },
+  { to: '/exercises', label: 'Exercises', Icon: Barbell },
+  { to: '/stats',     label: 'Stats',     Icon: ChartBar },
 ] as const;
 
 export function BottomNav() {
