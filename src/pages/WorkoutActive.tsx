@@ -5,27 +5,34 @@ import { WarmupChecklist } from '@/components/workout/WarmupChecklist';
 import { StretchChecklist } from '@/components/workout/StretchChecklist';
 import { SetLogger } from '@/components/workout/SetLogger';
 import { RestTimer } from '@/components/workout/RestTimer';
+import { FeelingMeter } from '@/components/workout/FeelingMeter';
 import { useTemplate } from '@/hooks/useTemplates';
 import { useExercises } from '@/hooks/useExercises';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { db } from '@/data/db';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
+import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
-import type { ActiveSet, ExerciseCategory } from '@/types';
+import type { ActiveSet, ExerciseCategory, Exercise } from '@/types';
 
 type WorkoutPhase = 'warmup' | 'workout' | 'stretching';
+
+// IDs of exercises to show FeelingMeter for, in order
+type FeelingEntry = { exerciseId: string; exercise: Exercise; startingWeightKg: number };
 
 export default function WorkoutActive() {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
 
   const [phase, setPhase] = useState<WorkoutPhase>('warmup');
-  const [sessionId, setSessionId] = useState<string | null>(null);
-  const [startedAt, setStartedAt] = useState<number>(0);
   const [completingAfterRest, setCompletingAfterRest] = useState(false);
   const [confirmingQuit, setConfirmingQuit] = useState(false);
   const [restLabel, setRestLabel] = useState('');
+  const [showRestoredBanner, setShowRestoredBanner] = useState(false);
+  const [feelingQueue, setFeelingQueue] = useState<FeelingEntry[]>([]);
+  // pendingRest holds the seconds to start after feeling queue drains
+  const pendingRestRef = useRef<number | null>(null);
 
   const liveTemplate = useTemplate(templateId ?? '');
   const template = liveTemplate ?? (templateId ? defaultTemplateMap.get(templateId) : undefined);
@@ -36,16 +43,21 @@ export default function WorkoutActive() {
   const store = useWorkoutStore();
   const {
     status,
+    sessionId,
+    sessionStartedAt,
     currentExerciseIndex,
     currentSetNumber,
     restSecondsRemaining,
     restTotalSeconds,
     restTimerActive,
+    restEndTimestamp,
     tickRestTimer,
     skipRestTimer,
+    setRestSeconds,
     startRestTimer,
     incrementSetNumber,
     nextExercise,
+    setExerciseAndSet,
     logSet,
     startSession,
     completeSession,
@@ -53,6 +65,31 @@ export default function WorkoutActive() {
   } = store;
 
   const prevStatus = useRef(status);
+  const mountedRef = useRef(false);
+
+  // On first mount: detect if a session was already in progress (restored from localStorage)
+  useEffect(() => {
+    if (mountedRef.current) return;
+    mountedRef.current = true;
+
+    if (status !== 'idle') {
+      // Session was restored from persisted storage
+      setPhase('workout');
+      setShowRestoredBanner(true);
+      setTimeout(() => setShowRestoredBanner(false), 4000);
+
+      // Correct the rest timer if app was backgrounded
+      if (restTimerActive && restEndTimestamp != null) {
+        const remaining = Math.max(0, Math.ceil((restEndTimestamp - Date.now()) / 1000));
+        if (remaining === 0) {
+          skipRestTimer();
+        } else {
+          setRestSeconds(remaining);
+        }
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Tick the rest timer every second
   useEffect(() => {
@@ -74,9 +111,21 @@ export default function WorkoutActive() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
+  // When feeling queue drains, kick off the pending rest (if any)
+  useEffect(() => {
+    if (feelingQueue.length === 0 && pendingRestRef.current != null) {
+      const secs = pendingRestRef.current;
+      pendingRestRef.current = null;
+      startRestTimer(secs);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [feelingQueue.length]);
+
   const finishWorkout = async () => {
     const completedAt = Date.now();
-    const durationSeconds = Math.round((completedAt - startedAt) / 1000);
+    const durationSeconds = sessionStartedAt
+      ? Math.round((completedAt - sessionStartedAt) / 1000)
+      : 0;
     if (sessionId) {
       await db.sessions.update(sessionId, { completedAt, durationSeconds });
     }
@@ -90,24 +139,93 @@ export default function WorkoutActive() {
     const id = nanoid();
     const now = Date.now();
     await db.sessions.add({ id, templateId: template.id, startedAt: now });
-    setSessionId(id);
-    setStartedAt(now);
-    startSession(template, id);
+    startSession(template, id, now);
     setPhase('workout');
   };
 
-  const handleSetLogged = (activeSet: ActiveSet, _isPR: boolean) => {
+  const handleSetLogged = async (activeSet: ActiveSet, _isPR: boolean) => {
     if (!template) return;
 
-    const currentTemplateExercise = template.exercises[currentExerciseIndex];
-    const isLastSet = currentSetNumber === currentTemplateExercise.sets;
+    const currTE = template.exercises[currentExerciseIndex];
+    const nextTE = template.exercises[currentExerciseIndex + 1];
+    const prevTE = template.exercises[currentExerciseIndex - 1];
+
+    const isLastSet = currentSetNumber === currTE.sets;
     const isLastExercise = currentExerciseIndex === template.exercises.length - 1;
 
-    // Compute rest label from pre-update values so set numbers are correct
-    const exerciseName = exerciseMap.get(currentTemplateExercise.exerciseId)?.name ?? '';
+    // Superset detection
+    const isFirstInPair =
+      currTE.isSuperset &&
+      nextTE?.isSuperset &&
+      nextTE.supersetGroupId != null &&
+      nextTE.supersetGroupId === currTE.supersetGroupId;
+
+    const isSecondInPair =
+      currTE.isSuperset &&
+      prevTE?.isSuperset &&
+      prevTE.supersetGroupId != null &&
+      prevTE.supersetGroupId === currTE.supersetGroupId;
+
+    logSet(activeSet);
+
+    if (isFirstInPair) {
+      // Jump to partner exercise, same set number, no rest
+      const partnerName = exerciseMap.get(nextTE.exerciseId)?.name ?? '';
+      setRestLabel(`${partnerName} — Set ${currentSetNumber}`);
+      setExerciseAndSet(currentExerciseIndex + 1, currentSetNumber);
+      // Do NOT start rest timer — no rest between superset partners
+      return;
+    }
+
+    if (isSecondInPair) {
+      const isLastSetOfPair = isLastSet;
+      const partnerExerciseA = exerciseMap.get(prevTE.exerciseId);
+      const partnerExerciseB = exerciseMap.get(currTE.exerciseId);
+
+      if (!isLastSetOfPair) {
+        // Go back to first partner, next set round
+        const aName = exerciseMap.get(prevTE.exerciseId)?.name ?? '';
+        setRestLabel(`Set ${currentSetNumber + 1} · ${aName} → ${exerciseMap.get(currTE.exerciseId)?.name ?? ''}`);
+        setExerciseAndSet(currentExerciseIndex - 1, currentSetNumber + 1);
+        const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
+        startRestTimer(restSecs);
+      } else {
+        // Both partners done — queue feeling meter for both exercises, then advance
+        const queueEntries: FeelingEntry[] = [];
+        if (partnerExerciseA) {
+          const pref = await db.exercisePrefs.get(partnerExerciseA.id);
+          queueEntries.push({ exerciseId: partnerExerciseA.id, exercise: partnerExerciseA, startingWeightKg: pref?.startingWeightKg ?? partnerExerciseA.startingWeightKg });
+        }
+        if (partnerExerciseB) {
+          const pref = await db.exercisePrefs.get(partnerExerciseB.id);
+          queueEntries.push({ exerciseId: partnerExerciseB.id, exercise: partnerExerciseB, startingWeightKg: pref?.startingWeightKg ?? partnerExerciseB.startingWeightKg });
+        }
+
+        if (!isLastExercise) {
+          const nextNonSupersetEx = template.exercises[currentExerciseIndex + 1];
+          const nextName = exerciseMap.get(nextNonSupersetEx.exerciseId)?.name ?? '';
+          setRestLabel(`Next: ${nextName}`);
+          nextExercise();
+        } else {
+          setCompletingAfterRest(true);
+        }
+
+        const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
+        if (queueEntries.length > 0) {
+          setFeelingQueue(queueEntries);
+          pendingRestRef.current = restSecs;
+        } else {
+          startRestTimer(restSecs);
+        }
+      }
+      return;
+    }
+
+    // ── Non-superset exercise ─────────────────────────────────────
+    const exerciseName = exerciseMap.get(currTE.exerciseId)?.name ?? '';
     let label: string;
     if (!isLastSet) {
-      label = `Set ${currentSetNumber + 1} of ${currentTemplateExercise.sets} · ${exerciseName}`;
+      label = `Set ${currentSetNumber + 1} of ${currTE.sets} · ${exerciseName}`;
     } else if (!isLastExercise) {
       const nextEx = template.exercises[currentExerciseIndex + 1];
       label = `Next: ${exerciseMap.get(nextEx.exerciseId)?.name ?? ''}`;
@@ -116,21 +234,35 @@ export default function WorkoutActive() {
     }
     setRestLabel(label);
 
-    logSet(activeSet);
-
     if (!isLastSet) {
       incrementSetNumber();
-    } else if (!isLastExercise) {
-      nextExercise();
+      startRestTimer(getRestSecondsForExercise(currTE.exerciseId, exerciseMap));
     } else {
-      setCompletingAfterRest(true);
-    }
+      // Last set of this exercise — show feeling meter, then rest
+      const exercise = exerciseMap.get(currTE.exerciseId) ?? staticExerciseMap.get(currTE.exerciseId);
+      const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
 
-    const exercise = exerciseMap.get(currentTemplateExercise.exerciseId);
-    startRestTimer(exercise?.restSeconds ?? 60);
+      if (!isLastExercise) {
+        nextExercise();
+      } else {
+        setCompletingAfterRest(true);
+      }
+
+      if (exercise) {
+        const pref = await db.exercisePrefs.get(exercise.id);
+        const startingWeight = pref?.startingWeightKg ?? exercise.startingWeightKg;
+        setFeelingQueue([{ exerciseId: exercise.id, exercise, startingWeightKg: startingWeight }]);
+        pendingRestRef.current = restSecs;
+      } else {
+        startRestTimer(restSecs);
+      }
+    }
   };
 
-  // Skip rest — the status useEffect handles finishWorkout if completingAfterRest
+  const handleFeelingDone = () => {
+    setFeelingQueue((q) => q.slice(1));
+  };
+
   const handleSkipRest = () => {
     skipRestTimer();
   };
@@ -167,8 +299,19 @@ export default function WorkoutActive() {
     return <StretchChecklist onFinish={() => navigate('/')} />;
   }
 
-  // ── Workout phase ──────────────────────────────────────────────
+  // ── Feeling meter phase ────────────────────────────────────────
+  if (feelingQueue.length > 0) {
+    const current = feelingQueue[0];
+    return (
+      <FeelingMeter
+        exercise={current.exercise}
+        currentStartingWeightKg={current.startingWeightKg}
+        onDone={handleFeelingDone}
+      />
+    );
+  }
 
+  // ── Rest phase ─────────────────────────────────────────────────
   if (status === 'resting') {
     return (
       <div style={{ maxWidth: 'var(--max-content-width)', margin: '0 auto' }}>
@@ -201,6 +344,24 @@ export default function WorkoutActive() {
       className="flex flex-col min-h-dvh mx-auto"
       style={{ maxWidth: 'var(--max-content-width)', background: 'var(--color-bg)' }}
     >
+      {/* Session restored banner */}
+      {showRestoredBanner && (
+        <div
+          className="flex items-center justify-between px-4 py-2"
+          style={{ background: 'var(--color-surface-2)', borderBottom: 'var(--border-thin)' }}
+        >
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+            Session restored
+          </p>
+          <button
+            onClick={() => setShowRestoredBanner(false)}
+            style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)' }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
+
       {/* Minimal header */}
       <header
         className="flex items-center justify-between px-4"
@@ -268,3 +429,11 @@ export default function WorkoutActive() {
   );
 }
 
+// ── Helpers ──────────────────────────────────────────────────────
+
+function getRestSecondsForExercise(
+  exerciseId: string,
+  exerciseMap: Map<string, Exercise>,
+): number {
+  return exerciseMap.get(exerciseId)?.restSeconds ?? staticExerciseMap.get(exerciseId)?.restSeconds ?? 60;
+}

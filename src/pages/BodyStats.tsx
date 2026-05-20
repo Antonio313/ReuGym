@@ -33,11 +33,11 @@ function WeightChart({ stats }: { stats: BodyStat[] }) {
 
   const W = 400;
   const H = 90;
-  const PAD = { top: 8, right: 8, bottom: 20, left: 40 };
+  const PAD = { top: 8, right: 8, bottom: 20, left: 44 };
   const innerW = W - PAD.left - PAD.right;
   const innerH = H - PAD.top - PAD.bottom;
 
-  const values = withWeight.map((s) => s.weightKg!);
+  const values = withWeight.map((s) => kgToLbs(s.weightKg!));
   const minVal = Math.min(...values);
   const maxVal = Math.max(...values);
   const range = maxVal - minVal || 1;
@@ -46,7 +46,7 @@ function WeightChart({ stats }: { stats: BodyStat[] }) {
 
   const coords = withWeight.map((s, i) => ({
     x: PAD.left + (i / (withWeight.length - 1)) * innerW,
-    y: PAD.top + innerH - ((s.weightKg! - minVal) / range) * innerH,
+    y: PAD.top + innerH - ((kgToLbs(s.weightKg!) - minVal) / range) * innerH,
     label: shortDate.format(new Date(s.date)),
   }));
 
@@ -78,6 +78,14 @@ function WeightChart({ stats }: { stats: BodyStat[] }) {
 
 // ─── Log form ────────────────────────────────────────────────────
 
+function kgToLbs(kg: number): number {
+  return Math.round(kg * 2.2046 * 10) / 10;
+}
+
+function lbsToKg(lbs: number): number {
+  return lbs / 2.2046;
+}
+
 function LogForm({
   latest,
   onSaved,
@@ -87,21 +95,23 @@ function LogForm({
   onSaved: () => void;
   onCancel: () => void;
 }) {
-  const [weightStr, setWeightStr] = useState(latest?.weightKg?.toString() ?? '');
+  // Input is in lbs; DB stores kg
+  const latestLbs = latest?.weightKg != null ? kgToLbs(latest.weightKg).toString() : '';
+  const [weightLbsStr, setWeightLbsStr] = useState(latestLbs);
   const [waistStr, setWaistStr] = useState(latest?.waistCm?.toString() ?? '');
   const [chestStr, setChestStr] = useState(latest?.chestCm?.toString() ?? '');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
-    const weight = parseFloat(weightStr);
-    if (!weightStr || isNaN(weight)) return;
+    const lbs = parseFloat(weightLbsStr);
+    if (!weightLbsStr || isNaN(lbs)) return;
 
     setSaving(true);
     const entry: BodyStat = {
       id: nanoid(),
       date: startOfToday(),
-      weightKg: weight,
+      weightKg: lbsToKg(lbs),
       waistCm: waistStr ? parseFloat(waistStr) : undefined,
       chestCm: chestStr ? parseFloat(chestStr) : undefined,
       notes: notes.trim() || undefined,
@@ -129,18 +139,18 @@ function LogForm({
         Log Entry — {formatDate(Date.now())}
       </p>
 
-      {/* Weight — required */}
+      {/* Weight — required, input in lbs */}
       <div>
         <p className="font-body mb-1" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-          Weight (kg) *
+          Weight (lbs) *
         </p>
         <input
           type="number"
           inputMode="decimal"
           step="0.1"
-          value={weightStr}
-          onChange={(e) => setWeightStr(e.target.value)}
-          placeholder="e.g. 96.0"
+          value={weightLbsStr}
+          onChange={(e) => setWeightLbsStr(e.target.value)}
+          placeholder="e.g. 215.0"
           className="w-full font-mono px-3 py-3"
           data-numeric
           style={inputStyle}
@@ -203,12 +213,12 @@ function LogForm({
       <div className="flex gap-3">
         <button
           onClick={handleSave}
-          disabled={saving || !weightStr}
+          disabled={saving || !weightLbsStr}
           className="flex-1 py-3 font-display uppercase tracking-wide"
           style={{
             fontSize: 'var(--text-body)',
-            background: saving || !weightStr ? 'var(--color-surface-2)' : 'var(--color-accent)',
-            color: saving || !weightStr ? 'var(--color-text-muted)' : '#fff',
+            background: saving || !weightLbsStr ? 'var(--color-surface-2)' : 'var(--color-accent)',
+            color: saving || !weightLbsStr ? 'var(--color-text-muted)' : '#fff',
             borderRadius: 'var(--radius-md)',
             border: 'none',
           }}
@@ -247,9 +257,11 @@ export default function BodyStats() {
   const latest = stats?.[0] ?? null;
   const previous = stats?.[1] ?? null;
 
+  const latestLbs = latest?.weightKg != null ? kgToLbs(latest.weightKg) : null;
+  const previousLbs = previous?.weightKg != null ? kgToLbs(previous.weightKg) : null;
   const weightDelta =
-    latest?.weightKg != null && previous?.weightKg != null
-      ? +(latest.weightKg - previous.weightKg).toFixed(1)
+    latestLbs != null && previousLbs != null
+      ? +(latestLbs - previousLbs).toFixed(1)
       : null;
 
   const chronological = stats ? [...stats].reverse() : [];
@@ -303,8 +315,8 @@ export default function BodyStats() {
               {/* Weight */}
               <div>
                 <p className="font-mono" data-numeric style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', color: 'var(--color-text)', lineHeight: 1 }}>
-                  {latest.weightKg}
-                  <span style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', marginLeft: '0.3rem' }}>kg</span>
+                  {latestLbs}
+                  <span style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', marginLeft: '0.3rem' }}>lbs</span>
                 </p>
                 {weightDelta !== null && (
                   <p
@@ -316,7 +328,7 @@ export default function BodyStats() {
                     }}
                   >
                     {weightDelta < 0 ? <TrendDown size={14} weight="bold" /> : weightDelta > 0 ? <TrendUp size={14} weight="bold" /> : null}
-                    {weightDelta > 0 ? '+' : ''}{weightDelta}kg
+                    {weightDelta > 0 ? '+' : ''}{weightDelta} lbs
                   </p>
                 )}
               </div>
@@ -389,7 +401,7 @@ export default function BodyStats() {
               <div className="text-right">
                 {stat.weightKg != null && (
                   <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                    {stat.weightKg}kg
+                    {kgToLbs(stat.weightKg)} lbs
                   </p>
                 )}
                 <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>

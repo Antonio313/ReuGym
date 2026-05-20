@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { db } from '@/data/db';
 import { checkIsPR } from '@/lib/pr';
 import { useLastSetData } from '@/hooks/useLastSetData';
+import { useExercisePref } from '@/hooks/useExercisePref';
 import { haptics } from '@/lib/haptics';
 import { playSetLogged } from '@/lib/audio';
 import { NumericKeypad } from '@/components/shared/NumericKeypad';
@@ -36,6 +37,7 @@ export function SetLogger({
   const [error, setError] = useState<string | null>(null);
 
   const lastData = useLastSetData(exercise.id, setNumber, sessionId);
+  const exercisePref = useExercisePref(exercise.id);
 
   // Reset fields when set number or exercise changes
   useEffect(() => {
@@ -45,8 +47,18 @@ export function SetLogger({
     setError(null);
   }, [exercise.id, setNumber]);
 
-  const resolvedWeight = weightStr !== '' ? parseFloat(weightStr) : (lastData?.weightKg ?? 0);
-  const resolvedReps = repsStr !== '' ? parseInt(repsStr, 10) : (lastData?.reps ?? 0);
+  // Default weight: lastData → exercisePref → exercise.startingWeightKg
+  const defaultWeightKg =
+    lastData?.weightKg != null
+      ? lastData.weightKg
+      : (exercisePref?.startingWeightKg ?? exercise.startingWeightKg);
+
+  // Default reps: lastData → lower bound of rep range
+  const defaultReps =
+    lastData?.reps != null ? lastData.reps : templateExercise.repRange[0];
+
+  const resolvedWeight = weightStr !== '' ? parseFloat(weightStr) : defaultWeightKg;
+  const resolvedReps = repsStr !== '' ? parseInt(repsStr, 10) : defaultReps;
 
   const handleLogSet = async () => {
     const weight = resolvedWeight;
@@ -128,14 +140,24 @@ export function SetLogger({
             >
               {exercise.name.toUpperCase()}
             </h2>
-            {templateExercise.isSuperset && (
-              <span
-                className="font-body uppercase tracking-widest"
-                style={{ fontSize: 'var(--text-micro)', color: 'var(--color-accent)' }}
-              >
-                Superset
-              </span>
-            )}
+            <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+              {templateExercise.isSuperset && (
+                <span
+                  className="font-body uppercase tracking-widest"
+                  style={{ fontSize: 'var(--text-micro)', color: 'var(--color-accent)' }}
+                >
+                  Superset
+                </span>
+              )}
+              {exercise.isBodyweight && (
+                <span
+                  className="font-body uppercase tracking-widest"
+                  style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+                >
+                  Bodyweight
+                </span>
+              )}
+            </div>
           </div>
           <div className="flex-shrink-0 text-right">
             <span
@@ -153,11 +175,11 @@ export function SetLogger({
         <div className="flex items-center gap-3">
           {lastData ? (
             <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-              Last: {lastData.weightKg > 0 ? `${lastData.weightKg}kg × ` : ''}{lastData.reps} reps
+              Last: {lastData.weightKg > 0 ? `${lastData.weightKg}${exercise.isCable ? ' hole' : 'kg'} × ` : ''}{lastData.reps} reps
             </p>
           ) : lastData === null ? (
             <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>
-              No previous data
+              Starting defaults shown
             </p>
           ) : null}
           {justLoggedPR && (
@@ -196,14 +218,14 @@ export function SetLogger({
                 data-numeric
                 style={{
                   fontSize: 'var(--text-h1)',
-                  color: weightStr ? 'var(--color-text)' : 'var(--color-text-faint)',
+                  color: weightStr ? 'var(--color-text)' : 'var(--color-text-muted)',
                   minHeight: '2rem',
                 }}
               >
-                {weightStr || (lastData?.weightKg != null ? String(lastData.weightKg) : '—')}
+                {weightStr || String(defaultWeightKg)}
               </span>
               <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                kg
+                {exercise.isCable ? 'hole' : 'kg'}
               </span>
             </button>
           )}
@@ -226,11 +248,11 @@ export function SetLogger({
               data-numeric
               style={{
                 fontSize: 'var(--text-h1)',
-                color: repsStr ? 'var(--color-text)' : 'var(--color-text-faint)',
+                color: repsStr ? 'var(--color-text)' : 'var(--color-text-muted)',
                 minHeight: '2rem',
               }}
             >
-              {repsStr || (lastData?.reps != null ? String(lastData.reps) : '—')}
+              {repsStr || String(defaultReps)}
             </span>
             <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
               reps

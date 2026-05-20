@@ -18,6 +18,7 @@ export type Exercise = {
   startingWeightKg: number;
   restSeconds: number;
   isBodyweight: boolean;
+  isCable?: boolean;
   notes?: string;
 };
 
@@ -86,6 +87,13 @@ export type StretchItem = {
   name: string;
   duration: string; // display string: "60s/side", "30s/leg"
   note?: string;
+};
+
+// ─── Exercise Preferences (stored in IndexedDB) ──────────────────
+
+export type ExercisePref = {
+  exerciseId: string;
+  startingWeightKg: number;
 };
 
 // ─── UI / Store Types ────────────────────────────────────────────

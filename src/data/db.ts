@@ -1,5 +1,5 @@
 import Dexie, { type Table } from 'dexie';
-import type { WorkoutSession, LoggedSet, BodyStat, WorkoutTemplate, Exercise } from '../types';
+import type { WorkoutSession, LoggedSet, BodyStat, WorkoutTemplate, Exercise, ExercisePref } from '../types';
 import { templates as defaultTemplates } from './templates';
 
 class WorkoutDB extends Dexie {
@@ -8,6 +8,7 @@ class WorkoutDB extends Dexie {
   bodyStats!:       Table<BodyStat, string>;
   customTemplates!: Table<WorkoutTemplate, string>;
   customExercises!: Table<Exercise, string>;
+  exercisePrefs!:   Table<ExercisePref, string>;
 
   constructor() {
     super('ReuGymDB');
@@ -35,7 +36,16 @@ class WorkoutDB extends Dexie {
       customExercises: 'id, category',
     });
 
-    // Seed templates for fresh installs (DB created directly at v3)
+    this.version(4).stores({
+      sessions:        'id, templateId, startedAt, completedAt',
+      sets:            'id, sessionId, exerciseId, completedAt, isPR, [exerciseId+completedAt]',
+      bodyStats:       'id, date',
+      customTemplates: 'id, category',
+      customExercises: 'id, category',
+      exercisePrefs:   'exerciseId',
+    });
+
+    // Seed templates for fresh installs (DB created directly at v4)
     this.on('populate', () => {
       this.customTemplates.bulkAdd(defaultTemplates);
     });
