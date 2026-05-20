@@ -33,6 +33,14 @@ export default function TemplateEditor() {
     saveTemplate(updated);
   };
 
+  const adjustSets = (index: number, delta: number) => {
+    const ex = template.exercises.map((entry, i) => {
+      if (i !== index) return entry;
+      return { ...entry, sets: Math.max(1, Math.min(10, entry.sets + delta)) };
+    });
+    update(ex);
+  };
+
   const moveUp = (index: number) => {
     if (index === 0) return;
     const ex = [...template.exercises];
@@ -136,16 +144,64 @@ export default function TemplateEditor() {
                 >
                   {name}
                 </p>
-                <p
-                  className="font-mono"
-                  data-numeric
-                  style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-                >
-                  {entry.sets} sets · {entry.repRange[0]}–{entry.repRange[1]} reps
-                  {entry.isSuperset && (
-                    <span style={{ color: 'var(--color-accent)' }}> · SS</span>
-                  )}
-                </p>
+                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                  {/* Sets stepper */}
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => adjustSets(index, -1)}
+                      disabled={entry.sets <= 1}
+                      className="font-mono"
+                      style={{
+                        fontSize: 'var(--text-meta)',
+                        width: '1.5rem',
+                        height: '1.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: 'var(--border-thin)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: entry.sets <= 1 ? 'var(--color-text-faint)' : 'var(--color-text-muted)',
+                        background: 'var(--color-surface)',
+                      }}
+                    >
+                      −
+                    </button>
+                    <span
+                      className="font-mono"
+                      data-numeric
+                      style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)', minWidth: '2.5rem', textAlign: 'center' }}
+                    >
+                      {entry.sets} sets
+                    </span>
+                    <button
+                      onClick={() => adjustSets(index, 1)}
+                      disabled={entry.sets >= 10}
+                      className="font-mono"
+                      style={{
+                        fontSize: 'var(--text-meta)',
+                        width: '1.5rem',
+                        height: '1.5rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        border: 'var(--border-thin)',
+                        borderRadius: 'var(--radius-sm)',
+                        color: entry.sets >= 10 ? 'var(--color-text-faint)' : 'var(--color-text-muted)',
+                        background: 'var(--color-surface)',
+                      }}
+                    >
+                      +
+                    </button>
+                  </div>
+                  <span
+                    className="font-mono"
+                    data-numeric
+                    style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+                  >
+                    · {entry.repRange[0]}–{entry.repRange[1]} reps
+                    {entry.isSuperset && <span style={{ color: 'var(--color-accent)' }}> · SS</span>}
+                  </span>
+                </div>
               </div>
 
               {/* Delete */}

@@ -37,4 +37,16 @@ export const dayWarmups: Record<ExerciseCategory, WarmupItem[]> = {
     { id: 'wc-birddog',     name: 'Bird dogs',                         reps: '8/side' },
     { id: 'wc-inchworm',    name: 'Inchworms',                         reps: '5 reps' },
   ],
+  glutes: [
+    { id: 'wgt-bridge',    name: 'Glute bridges',                      reps: '15 reps',  note: 'Squeeze and hold 2s at top' },
+    { id: 'wgt-clamshell', name: 'Clamshells',                         reps: '12/side' },
+    { id: 'wgt-lunge',     name: 'Reverse lunges',                     reps: '10/leg' },
+    { id: 'wgt-hip-90',   name: '90/90 hip stretch',                   reps: '60s/side' },
+  ],
+  back: [
+    { id: 'wb-pull-aparts', name: 'Band pull-aparts',                  reps: '15 reps' },
+    { id: 'wb-scap-wall',   name: 'Scapular wall slides',              reps: '10 reps' },
+    { id: 'wb-cat-cow',     name: 'Cat-cow',                           reps: '8 reps' },
+    { id: 'wb-dead-hang',   name: 'Dead hang',                         reps: '20–30 seconds', note: 'Decompress spine before rows' },
+  ],
 };

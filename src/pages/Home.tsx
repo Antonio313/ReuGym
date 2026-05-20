@@ -8,7 +8,7 @@ import { useTemplates, defaultTemplates } from '@/hooks/useTemplates';
 import { db } from '@/data/db';
 import type { WorkoutTemplate } from '@/types';
 
-const DAY_LABEL_ORDER = ['push', 'pull', 'legs', 'core'] as const;
+const DAY_LABEL_ORDER = ['push', 'pull', 'legs', 'core', 'glutes', 'back'] as const;
 
 function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat('en-US', {

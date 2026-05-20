@@ -1,6 +1,6 @@
 import Dexie, { type Table } from 'dexie';
 import type { WorkoutSession, LoggedSet, BodyStat, WorkoutTemplate, Exercise, ExercisePref } from '../types';
-import { templates as defaultTemplates } from './templates';
+import { templates as defaultTemplates, glutesTemplate, backTemplate } from './templates';
 
 class WorkoutDB extends Dexie {
   sessions!:        Table<WorkoutSession, string>;
@@ -45,7 +45,22 @@ class WorkoutDB extends Dexie {
       exercisePrefs:   'exerciseId',
     });
 
-    // Seed templates for fresh installs (DB created directly at v4)
+    this.version(5).stores({
+      sessions:        'id, templateId, startedAt, completedAt',
+      sets:            'id, sessionId, exerciseId, completedAt, isPR, [exerciseId+completedAt]',
+      bodyStats:       'id, date',
+      customTemplates: 'id, category',
+      customExercises: 'id, category',
+      exercisePrefs:   'exerciseId',
+    }).upgrade(async (tx) => {
+      const existing = await tx.table('customTemplates').bulkGet(['glutes', 'back']);
+      const toAdd = [];
+      if (!existing[0]) toAdd.push(glutesTemplate);
+      if (!existing[1]) toAdd.push(backTemplate);
+      if (toAdd.length) await tx.table('customTemplates').bulkAdd(toAdd);
+    });
+
+    // Seed all templates for fresh installs (DB created directly at v5)
     this.on('populate', () => {
       this.customTemplates.bulkAdd(defaultTemplates);
     });

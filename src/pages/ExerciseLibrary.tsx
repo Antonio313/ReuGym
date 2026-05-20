@@ -5,12 +5,14 @@ import { PageShell } from '@/components/layout/PageShell';
 import { useExercises } from '@/hooks/useExercises';
 import type { ExerciseCategory } from '@/types';
 
-const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core'];
+const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back'];
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
-  push: 'PUSH',
-  pull: 'PULL',
-  legs: 'LEGS',
-  core: 'CORE',
+  push:   'PUSH',
+  pull:   'PULL',
+  legs:   'LEGS',
+  core:   'CORE',
+  glutes: 'GLUTES',
+  back:   'BACK',
 };
 
 export default function ExerciseLibrary() {

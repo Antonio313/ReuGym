@@ -1,6 +1,6 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { useLiveQuery } from 'dexie-react-hooks';
-import { ArrowLeft, Trophy } from '@phosphor-icons/react';
+import { ArrowLeft, Trophy, PencilSimple } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { db } from '@/data/db';
@@ -300,6 +300,13 @@ export default function ExerciseDetail() {
         >
           {exercise.name.toUpperCase()}
         </h1>
+        <button
+          onClick={() => navigate(`/exercise/${exercise.id}/edit`)}
+          style={{ color: 'var(--color-text-muted)', flexShrink: 0 }}
+          aria-label="Edit exercise"
+        >
+          <PencilSimple size={20} />
+        </button>
       </header>
 
       <main className="px-4 pb-8">
@@ -346,7 +353,7 @@ export default function ExerciseDetail() {
                 Starting weight
               </p>
               <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                {exercise.startingWeightKg}kg
+                {exercise.startingWeightKg}{exercise.isCable ? ' hole' : 'kg'}
               </p>
             </div>
           )}

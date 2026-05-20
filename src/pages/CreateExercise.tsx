@@ -1,18 +1,18 @@
-import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams, useParams } from 'react-router-dom';
 import { useForm, Controller } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
-import { ArrowLeft } from '@phosphor-icons/react';
-import { createExercise } from '@/hooks/useExercises';
+import { ArrowLeft, Trash } from '@phosphor-icons/react';
+import { createExercise, updateExercise, deleteCustomExercise, isStaticExercise, useExercises } from '@/hooks/useExercises';
 import type { ExerciseCategory, ExerciseType, MuscleGroup } from '@/types';
 
 // ─── Schema ─────────────────────────────────────────────────────
 
 const schema = z.object({
   name:             z.string().min(1, 'Name is required').max(60),
-  category:         z.enum(['push', 'pull', 'legs', 'core']),
+  category:         z.enum(['push', 'pull', 'legs', 'core', 'glutes', 'back']),
   type:             z.enum(['compound', 'accessory', 'plyo', 'isometric']),
   muscles:          z.array(z.string()).min(1, 'Select at least one muscle group'),
   repRangeMin:      z.number().int().min(1).max(100),
@@ -21,6 +21,7 @@ const schema = z.object({
   startingWeightKg: z.number().min(0),
   restSeconds:      z.number().int().min(15).max(600),
   notes:            z.string().max(200).optional(),
+  videoUrl:         z.string().max(500).optional(),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -28,10 +29,12 @@ type FormValues = z.infer<typeof schema>;
 // ─── Constants ──────────────────────────────────────────────────
 
 const CATEGORIES: { value: ExerciseCategory; label: string }[] = [
-  { value: 'push', label: 'Push' },
-  { value: 'pull', label: 'Pull' },
-  { value: 'legs', label: 'Legs' },
-  { value: 'core', label: 'Core' },
+  { value: 'push',   label: 'Push' },
+  { value: 'pull',   label: 'Pull' },
+  { value: 'legs',   label: 'Legs' },
+  { value: 'core',   label: 'Core' },
+  { value: 'glutes', label: 'Glutes' },
+  { value: 'back',   label: 'Back' },
 ];
 
 const TYPES: { value: ExerciseType; label: string }[] = [
@@ -104,8 +107,17 @@ function PillButton({
 export default function CreateExercise() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { exerciseId } = useParams<{ exerciseId?: string }>();
   const returnTo = searchParams.get('returnTo');
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+
+  const isEditMode = exerciseId !== undefined;
+
+  // In edit mode, find the exercise to pre-populate
+  const allExercises = useExercises();
+  const existingExercise = isEditMode ? allExercises.find((e) => e.id === exerciseId) : undefined;
+  const isBuiltIn = isEditMode && exerciseId ? isStaticExercise(exerciseId) : false;
 
   const {
     register,
@@ -113,6 +125,7 @@ export default function CreateExercise() {
     control,
     watch,
     setValue,
+    reset,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(schema),
@@ -127,6 +140,25 @@ export default function CreateExercise() {
       restSeconds:      60,
     },
   });
+
+  // Populate form when editing an existing exercise
+  useEffect(() => {
+    if (existingExercise) {
+      reset({
+        name:             existingExercise.name,
+        category:         existingExercise.category,
+        type:             existingExercise.type,
+        muscles:          existingExercise.muscles,
+        repRangeMin:      existingExercise.defaultRepRange[0],
+        repRangeMax:      existingExercise.defaultRepRange[1],
+        isBodyweight:     existingExercise.isBodyweight,
+        startingWeightKg: existingExercise.startingWeightKg,
+        restSeconds:      existingExercise.restSeconds,
+        notes:            existingExercise.notes ?? '',
+        videoUrl:         existingExercise.videoUrl ?? '',
+      });
+    }
+  }, [existingExercise, reset]);
 
   const isBodyweight = watch('isBodyweight');
   const selectedMuscles = watch('muscles');
@@ -146,23 +178,54 @@ export default function CreateExercise() {
   const onSubmit = async (data: FormValues) => {
     setSaving(true);
     try {
-      await createExercise({
-        id:               nanoid(),
+      const exercise = {
+        id:               isEditMode ? exerciseId! : nanoid(),
         name:             data.name,
         category:         data.category,
         type:             data.type,
         muscles:          data.muscles as MuscleGroup[],
-        defaultRepRange:  [data.repRangeMin, data.repRangeMax],
+        defaultRepRange:  [data.repRangeMin, data.repRangeMax] as [number, number],
         startingWeightKg: data.isBodyweight ? 0 : data.startingWeightKg,
         restSeconds:      data.restSeconds,
         isBodyweight:     data.isBodyweight,
+        isCable:          existingExercise?.isCable,
         notes:            data.notes || undefined,
-      });
-      navigate(returnTo ?? '/');
+        videoUrl:         data.videoUrl || undefined,
+      };
+
+      if (isEditMode) {
+        await updateExercise(exercise);
+      } else {
+        await createExercise(exercise);
+      }
+      navigate(returnTo ?? (isEditMode ? `/exercise/${exerciseId}` : '/exercises'));
     } finally {
       setSaving(false);
     }
   };
+
+  const handleReset = async () => {
+    if (!exerciseId) return;
+    // Remove the override — static defaults take effect again
+    await deleteCustomExercise(exerciseId);
+    navigate(`/exercise/${exerciseId}`);
+  };
+
+  const handleDelete = async () => {
+    if (!exerciseId) return;
+    await deleteCustomExercise(exerciseId);
+    navigate('/exercises');
+  };
+
+  if (isEditMode && !existingExercise) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-dvh gap-4 px-4"
+        style={{ background: 'var(--color-bg)' }}>
+        <p style={{ color: 'var(--color-text-muted)' }}>Exercise not found.</p>
+        <button onClick={() => navigate(-1)} style={{ color: 'var(--color-accent)' }}>← Back</button>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -177,10 +240,54 @@ export default function CreateExercise() {
         <button onClick={() => navigate(-1)} style={{ color: 'var(--color-text-muted)' }}>
           <ArrowLeft size={22} />
         </button>
-        <span className="font-display" style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)' }}>
-          NEW EXERCISE
+        <span className="font-display flex-1 min-w-0 truncate" style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)' }}>
+          {isEditMode ? 'EDIT EXERCISE' : 'NEW EXERCISE'}
         </span>
+        {/* Delete button — only for custom (non-built-in) exercises */}
+        {isEditMode && !isBuiltIn && (
+          confirmDelete ? (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setConfirmDelete(false)}
+                className="font-body"
+                style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                className="font-body font-medium"
+                style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}
+              >
+                Delete
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setConfirmDelete(true)}
+              style={{ color: 'var(--color-text-faint)' }}
+              aria-label="Delete exercise"
+            >
+              <Trash size={20} />
+            </button>
+          )
+        )}
       </header>
+
+      {/* Built-in exercise notice */}
+      {isEditMode && isBuiltIn && (
+        <div
+          className="px-4 py-3 flex items-center justify-between"
+          style={{ background: 'var(--color-surface)', borderBottom: 'var(--border-thin)' }}
+        >
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+            Built-in exercise — edits create a custom override
+          </p>
+        </div>
+      )}
 
       {/* Form */}
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-6 px-4 py-6 pb-12">
@@ -297,7 +404,7 @@ export default function CreateExercise() {
           <FieldError message={errors.repRangeMin?.message ?? errors.repRangeMax?.message} />
         </div>
 
-        {/* Bodyweight toggle */}
+        {/* Bodyweight toggle + starting weight */}
         <div>
           <FieldLabel>Weight</FieldLabel>
           <Controller
@@ -360,7 +467,9 @@ export default function CreateExercise() {
                     outline: 'none',
                   }}
                 />
-                <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>kg</span>
+                <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>
+                  {existingExercise?.isCable ? 'hole' : 'kg'}
+                </span>
               </div>
               <FieldError message={errors.startingWeightKg?.message} />
             </div>
@@ -424,6 +533,27 @@ export default function CreateExercise() {
           <FieldError message={errors.notes?.message} />
         </div>
 
+        {/* Reference video URL */}
+        <div>
+          <FieldLabel>Reference video URL <span style={{ color: 'var(--color-text-faint)' }}>(optional)</span></FieldLabel>
+          <input
+            {...register('videoUrl')}
+            type="url"
+            inputMode="url"
+            placeholder="YouTube or TikTok URL"
+            className="w-full font-body px-3 py-3"
+            style={{
+              fontSize: 'var(--text-body)',
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+              outline: 'none',
+            }}
+          />
+          <FieldError message={errors.videoUrl?.message} />
+        </div>
+
         {/* Submit */}
         <button
           type="submit"
@@ -437,8 +567,20 @@ export default function CreateExercise() {
             border: 'none',
           }}
         >
-          {saving ? 'Saving…' : 'Save Exercise'}
+          {saving ? 'Saving…' : isEditMode ? 'Save Changes' : 'Save Exercise'}
         </button>
+
+        {/* Reset to defaults — only shown for built-in exercises that have been overridden */}
+        {isEditMode && isBuiltIn && (
+          <button
+            type="button"
+            onClick={handleReset}
+            className="w-full py-3 font-body"
+            style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}
+          >
+            Reset to defaults
+          </button>
+        )}
 
       </form>
     </div>

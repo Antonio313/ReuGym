@@ -15,7 +15,8 @@ function AppRoutes() {
   const isWorkoutActive =
     location.pathname.startsWith('/workout/') ||
     location.pathname.startsWith('/template/') ||
-    location.pathname.startsWith('/exercise/new');
+    location.pathname.startsWith('/exercise/new') ||
+    location.pathname.endsWith('/edit');
 
   return (
     <>
@@ -28,7 +29,8 @@ function AppRoutes() {
         <Route path="/stats"                  element={<BodyStats />} />
         <Route path="/style"                  element={<StyleGuide />} />
         <Route path="/template/:id/edit"      element={<TemplateEditor />} />
-        <Route path="/exercise/new"           element={<CreateExercise />} />
+        <Route path="/exercise/new"             element={<CreateExercise />} />
+        <Route path="/exercise/:exerciseId/edit" element={<CreateExercise />} />
       </Routes>
       {!isWorkoutActive && <BottomNav />}
     </>

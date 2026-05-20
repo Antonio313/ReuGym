@@ -7,6 +7,7 @@ import { useExercisePref } from '@/hooks/useExercisePref';
 import { haptics } from '@/lib/haptics';
 import { playSetLogged } from '@/lib/audio';
 import { NumericKeypad } from '@/components/shared/NumericKeypad';
+import { VideoReference } from '@/components/workout/VideoReference';
 import type { TemplateExercise, Exercise, ActiveSet } from '@/types';
 
 type Props = {
@@ -158,6 +159,11 @@ export function SetLogger({
                 </span>
               )}
             </div>
+            {exercise.videoUrl && (
+              <div className="mt-2">
+                <VideoReference videoUrl={exercise.videoUrl} />
+              </div>
+            )}
           </div>
           <div className="flex-shrink-0 text-right">
             <span

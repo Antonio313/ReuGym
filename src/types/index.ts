@@ -1,6 +1,6 @@
 // ─── Exercise Library (static, lives in code) ───────────────────
 
-export type ExerciseCategory = 'push' | 'pull' | 'legs' | 'core';
+export type ExerciseCategory = 'push' | 'pull' | 'legs' | 'core' | 'glutes' | 'back';
 export type ExerciseType = 'compound' | 'accessory' | 'plyo' | 'isometric';
 export type MuscleGroup =
   | 'chest' | 'shoulders' | 'triceps'
@@ -19,6 +19,7 @@ export type Exercise = {
   restSeconds: number;
   isBodyweight: boolean;
   isCable?: boolean;
+  videoUrl?: string;
   notes?: string;
 };
 

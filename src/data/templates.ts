@@ -60,6 +60,39 @@ export const templates: WorkoutTemplate[] = [
       { exerciseId: 'single-leg-balance',   sets: 2, repRange: [2, 2],   isSuperset: false },
     ],
   },
+  {
+    id: 'glutes',
+    name: 'Glute Day',
+    category: 'glutes',
+    shortLabel: 'GLUTE',
+    exercises: [
+      { exerciseId: 'barbell-hip-thrust',   sets: 4, repRange: [8, 10],  isSuperset: false },
+      { exerciseId: 'sumo-deadlift',        sets: 3, repRange: [5, 7],   isSuperset: false },
+      { exerciseId: 'step-up',              sets: 3, repRange: [10, 12], isSuperset: false },
+      { exerciseId: 'good-morning',         sets: 3, repRange: [10, 12], isSuperset: false },
+      { exerciseId: 'cable-kickback',       sets: 3, repRange: [12, 15], isSuperset: false },
+      { exerciseId: 'donkey-kick',          sets: 2, repRange: [15, 20], isSuperset: false },
+      { exerciseId: 'side-lying-clamshell', sets: 2, repRange: [15, 20], isSuperset: false },
+    ],
+  },
+  {
+    id: 'back',
+    name: 'Back Day',
+    category: 'back',
+    shortLabel: 'BACK',
+    exercises: [
+      { exerciseId: 'pull-up',               sets: 4, repRange: [6, 10],  isSuperset: false },
+      { exerciseId: 'seated-cable-row',       sets: 3, repRange: [8, 10],  isSuperset: false },
+      { exerciseId: 'single-arm-db-row',      sets: 3, repRange: [8, 10],  isSuperset: false },
+      { exerciseId: 't-bar-row',              sets: 3, repRange: [8, 10],  isSuperset: false },
+      { exerciseId: 'chest-supported-row',    sets: 3, repRange: [8, 10],  isSuperset: true,  supersetGroupId: 'back-A' },
+      { exerciseId: 'straight-arm-pulldown',  sets: 3, repRange: [12, 15], isSuperset: true,  supersetGroupId: 'back-A' },
+      { exerciseId: 'barbell-shrug',          sets: 2, repRange: [12, 15], isSuperset: false },
+    ],
+  },
 ];
 
 export const templateMap = new Map(templates.map((t) => [t.id, t]));
+
+export const glutesTemplate = templates.find((t) => t.id === 'glutes')!;
+export const backTemplate = templates.find((t) => t.id === 'back')!;
