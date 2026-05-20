@@ -9,10 +9,12 @@ type Props = {
 };
 
 const DAY_LABELS: Record<ExerciseCategory, string> = {
-  push: 'PUSH DAY ADD-ONS',
-  pull: 'PULL DAY ADD-ONS',
-  legs: 'LEG DAY ADD-ONS',
-  core: 'CORE DAY ADD-ONS',
+  push:   'PUSH DAY ADD-ONS',
+  pull:   'PULL DAY ADD-ONS',
+  legs:   'LEG DAY ADD-ONS',
+  core:   'CORE DAY ADD-ONS',
+  glutes: 'GLUTE DAY ADD-ONS',
+  back:   'BACK DAY ADD-ONS',
 };
 
 function CheckItem({

@@ -5,13 +5,15 @@ import { useExercises } from '@/hooks/useExercises';
 import type { ExerciseCategory } from '@/types';
 
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
-  push: 'PUSH',
-  pull: 'PULL',
-  legs: 'LEGS',
-  core: 'CORE',
+  push:   'PUSH',
+  pull:   'PULL',
+  legs:   'LEGS',
+  core:   'CORE',
+  glutes: 'GLUTES',
+  back:   'BACK',
 };
 
-const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core'];
+const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back'];
 
 type Props = {
   open: boolean;
