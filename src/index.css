@@ -56,6 +56,11 @@
   font-feature-settings: "tnum";
 }
 
+/* Prevent iOS auto-zoom on input focus — Safari zooms when font-size < 16px */
+input, textarea, select {
+  font-size: max(1em, 16px);
+}
+
 /* Remove autofill yellow */
 input:-webkit-autofill {
   -webkit-box-shadow: 0 0 0 1000px #1A1A1A inset;
