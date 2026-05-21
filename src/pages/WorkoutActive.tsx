@@ -1,36 +1,49 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
-import { WarmupChecklist } from '@/components/workout/WarmupChecklist';
-import { StretchChecklist } from '@/components/workout/StretchChecklist';
+import { useLiveQuery } from 'dexie-react-hooks';
+import { WorkoutPreview } from '@/components/workout/WorkoutPreview';
+import { StretchStep } from '@/components/workout/StretchStep';
 import { SetLogger } from '@/components/workout/SetLogger';
 import { RestTimer } from '@/components/workout/RestTimer';
 import { FeelingMeter } from '@/components/workout/FeelingMeter';
+import { WorkoutComplete, type CompletionStats } from '@/components/workout/WorkoutComplete';
 import { useTemplate } from '@/hooks/useTemplates';
 import { useExercises } from '@/hooks/useExercises';
+import { useDayStretches } from '@/hooks/useDayStretches';
 import { useWorkoutStore } from '@/store/workoutStore';
+import { useWakeLock } from '@/lib/wakeLock';
 import { db } from '@/data/db';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
-import type { ActiveSet, ExerciseCategory, Exercise } from '@/types';
+import type { ActiveSet, Exercise, ExercisePref } from '@/types';
 
-type WorkoutPhase = 'warmup' | 'workout' | 'stretching';
+type WorkoutPhase = 'preview' | 'pre-stretch' | 'workout' | 'post-stretch' | 'complete';
 
-// IDs of exercises to show FeelingMeter for, in order
-type FeelingEntry = { exerciseId: string; exercise: Exercise; startingWeightKg: number };
+type FeelingEntry = {
+  exerciseId: string;
+  exercise: Exercise;
+  startingWeightKg: number;
+  startingReps: number;
+  sessionId: string;
+};
 
 export default function WorkoutActive() {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
 
-  const [phase, setPhase] = useState<WorkoutPhase>('warmup');
+  const [phase, setPhase] = useState<WorkoutPhase>('preview');
+  const [stretchIndex, setStretchIndex] = useState(0);
   const [completingAfterRest, setCompletingAfterRest] = useState(false);
   const [confirmingQuit, setConfirmingQuit] = useState(false);
   const [restLabel, setRestLabel] = useState('');
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [feelingQueue, setFeelingQueue] = useState<FeelingEntry[]>([]);
+  const [completionStats, setCompletionStats] = useState<CompletionStats | null>(null);
+  const [restNextExercise, setRestNextExercise] = useState<Exercise | null>(null);
+  const [restNextTarget, setRestNextTarget] = useState<{ weight: number | null; reps: [number, number] } | null>(null);
   // pendingRest holds the seconds to start after feeling queue drains
   const pendingRestRef = useRef<number | null>(null);
 
@@ -39,6 +52,11 @@ export default function WorkoutActive() {
 
   const allExercises = useExercises();
   const exerciseMap = new Map(allExercises.map((e) => [e.id, e]));
+
+  const stretches = useDayStretches(template?.category ?? 'push');
+
+  const allPrefs = useLiveQuery(() => db.exercisePrefs.toArray()) ?? [];
+  const prefsMap = new Map<string, ExercisePref>(allPrefs.map((p) => [p.exerciseId, p]));
 
   const store = useWorkoutStore();
   const {
@@ -59,10 +77,14 @@ export default function WorkoutActive() {
     nextExercise,
     setExerciseAndSet,
     logSet,
+    logSetSilent,
     startSession,
     completeSession,
     resetSession,
   } = store;
+
+  // Prevent screen sleep during active workout
+  useWakeLock(phase !== 'preview' && phase !== 'complete');
 
   const prevStatus = useRef(status);
   const mountedRef = useRef(false);
@@ -73,12 +95,10 @@ export default function WorkoutActive() {
     mountedRef.current = true;
 
     if (status !== 'idle') {
-      // Session was restored from persisted storage
       setPhase('workout');
       setShowRestoredBanner(true);
       setTimeout(() => setShowRestoredBanner(false), 4000);
 
-      // Correct the rest timer if app was backgrounded
       if (restTimerActive && restEndTimestamp != null) {
         const remaining = Math.max(0, Math.ceil((restEndTimestamp - Date.now()) / 1000));
         if (remaining === 0) {
@@ -111,27 +131,39 @@ export default function WorkoutActive() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status]);
 
-  // When feeling queue drains, kick off the pending rest (if any)
-  useEffect(() => {
-    if (feelingQueue.length === 0 && pendingRestRef.current != null) {
-      const secs = pendingRestRef.current;
-      pendingRestRef.current = null;
-      startRestTimer(secs);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [feelingQueue.length]);
 
   const finishWorkout = async () => {
     const completedAt = Date.now();
     const durationSeconds = sessionStartedAt
       ? Math.round((completedAt - sessionStartedAt) / 1000)
       : 0;
+
+    let stats: CompletionStats = {
+      durationSeconds,
+      exercisesCompleted: template?.exercises.length ?? 0,
+      totalSets: 0,
+      prsHit: 0,
+      totalVolumeKg: 0,
+    };
+
     if (sessionId) {
       await db.sessions.update(sessionId, { completedAt, durationSeconds });
+      const setsInSession = await db.sets.where('sessionId').equals(sessionId).toArray();
+      const workSets = setsInSession.filter((s) => !s.isWarmup);
+      stats = {
+        durationSeconds,
+        exercisesCompleted: template?.exercises.length ?? 0,
+        totalSets: workSets.length,
+        prsHit: workSets.filter((s) => s.isPR).length,
+        totalVolumeKg: Math.round(workSets.reduce((sum, s) => sum + s.weightKg * s.reps, 0)),
+      };
     }
+
+    setCompletionStats(stats);
     completeSession();
     resetSession();
-    setPhase('stretching');
+    setStretchIndex(0);
+    setPhase('post-stretch');
   };
 
   const handleStartWorkout = async () => {
@@ -140,7 +172,22 @@ export default function WorkoutActive() {
     const now = Date.now();
     await db.sessions.add({ id, templateId: template.id, startedAt: now });
     startSession(template, id, now);
-    setPhase('workout');
+    setStretchIndex(0);
+    setPhase('pre-stretch');
+  };
+
+  const handleStretchNext = () => {
+    const list = phase === 'pre-stretch' ? stretches.pre : stretches.post;
+    if (stretchIndex < list.length - 1) {
+      setStretchIndex((i) => i + 1);
+    } else {
+      setStretchIndex(0);
+      if (phase === 'pre-stretch') {
+        setPhase('workout');
+      } else {
+        setPhase('complete');
+      }
+    }
   };
 
   const handleSetLogged = async (activeSet: ActiveSet, _isPR: boolean) => {
@@ -166,47 +213,93 @@ export default function WorkoutActive() {
       prevTE.supersetGroupId != null &&
       prevTE.supersetGroupId === currTE.supersetGroupId;
 
-    logSet(activeSet);
-
     if (isFirstInPair) {
-      // Jump to partner exercise, same set number, no rest
+      logSetSilent(activeSet);
       const partnerName = exerciseMap.get(nextTE.exerciseId)?.name ?? '';
+      const partnerEx = exerciseMap.get(nextTE.exerciseId);
       setRestLabel(`${partnerName} — Set ${currentSetNumber}`);
+      if (partnerEx) {
+        const pref = prefsMap.get(partnerEx.id);
+        setRestNextExercise(partnerEx);
+        setRestNextTarget({
+          weight: partnerEx.isBodyweight ? null : (pref?.startingWeightKg ?? partnerEx.startingWeightKg),
+          reps: nextTE.repRange,
+        });
+      } else {
+        setRestNextExercise(null);
+        setRestNextTarget(null);
+      }
       setExerciseAndSet(currentExerciseIndex + 1, currentSetNumber);
-      // Do NOT start rest timer — no rest between superset partners
       return;
     }
 
     if (isSecondInPair) {
+      logSetSilent(activeSet);
       const isLastSetOfPair = isLastSet;
       const partnerExerciseA = exerciseMap.get(prevTE.exerciseId);
       const partnerExerciseB = exerciseMap.get(currTE.exerciseId);
 
       if (!isLastSetOfPair) {
-        // Go back to first partner, next set round
         const aName = exerciseMap.get(prevTE.exerciseId)?.name ?? '';
         setRestLabel(`Set ${currentSetNumber + 1} · ${aName} → ${exerciseMap.get(currTE.exerciseId)?.name ?? ''}`);
+        if (partnerExerciseA) {
+          const prefA = prefsMap.get(partnerExerciseA.id);
+          setRestNextExercise(partnerExerciseA);
+          setRestNextTarget({
+            weight: partnerExerciseA.isBodyweight ? null : (prefA?.startingWeightKg ?? partnerExerciseA.startingWeightKg),
+            reps: prevTE.repRange,
+          });
+        } else {
+          setRestNextExercise(null);
+          setRestNextTarget(null);
+        }
         setExerciseAndSet(currentExerciseIndex - 1, currentSetNumber + 1);
         const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
         startRestTimer(restSecs);
       } else {
-        // Both partners done — queue feeling meter for both exercises, then advance
         const queueEntries: FeelingEntry[] = [];
+        const sid = sessionId ?? '';
         if (partnerExerciseA) {
-          const pref = await db.exercisePrefs.get(partnerExerciseA.id);
-          queueEntries.push({ exerciseId: partnerExerciseA.id, exercise: partnerExerciseA, startingWeightKg: pref?.startingWeightKg ?? partnerExerciseA.startingWeightKg });
+          const pref = prefsMap.get(partnerExerciseA.id);
+          queueEntries.push({
+            exerciseId: partnerExerciseA.id,
+            exercise: partnerExerciseA,
+            startingWeightKg: pref?.startingWeightKg ?? partnerExerciseA.startingWeightKg,
+            startingReps: pref?.startingReps ?? prevTE.repRange[0],
+            sessionId: sid,
+          });
         }
         if (partnerExerciseB) {
-          const pref = await db.exercisePrefs.get(partnerExerciseB.id);
-          queueEntries.push({ exerciseId: partnerExerciseB.id, exercise: partnerExerciseB, startingWeightKg: pref?.startingWeightKg ?? partnerExerciseB.startingWeightKg });
+          const pref = prefsMap.get(partnerExerciseB.id);
+          queueEntries.push({
+            exerciseId: partnerExerciseB.id,
+            exercise: partnerExerciseB,
+            startingWeightKg: pref?.startingWeightKg ?? partnerExerciseB.startingWeightKg,
+            startingReps: pref?.startingReps ?? currTE.repRange[0],
+            sessionId: sid,
+          });
         }
 
         if (!isLastExercise) {
           const nextNonSupersetEx = template.exercises[currentExerciseIndex + 1];
-          const nextName = exerciseMap.get(nextNonSupersetEx.exerciseId)?.name ?? '';
+          const nextEx = exerciseMap.get(nextNonSupersetEx.exerciseId);
+          const nextName = nextEx?.name ?? '';
           setRestLabel(`Next: ${nextName}`);
+          if (nextEx) {
+            const pref = prefsMap.get(nextEx.id);
+            setRestNextExercise(nextEx);
+            setRestNextTarget({
+              weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+              reps: nextNonSupersetEx.repRange,
+            });
+          } else {
+            setRestNextExercise(null);
+            setRestNextTarget(null);
+          }
           nextExercise();
         } else {
+          setRestNextExercise(null);
+          setRestNextTarget(null);
           setCompletingAfterRest(true);
         }
 
@@ -222,23 +315,56 @@ export default function WorkoutActive() {
     }
 
     // ── Non-superset exercise ─────────────────────────────────────
+    logSet(activeSet);
     const exerciseName = exerciseMap.get(currTE.exerciseId)?.name ?? '';
     let label: string;
     if (!isLastSet) {
       label = `Set ${currentSetNumber + 1} of ${currTE.sets} · ${exerciseName}`;
     } else if (!isLastExercise) {
-      const nextEx = template.exercises[currentExerciseIndex + 1];
-      label = `Next: ${exerciseMap.get(nextEx.exerciseId)?.name ?? ''}`;
+      const nextTeEntry = template.exercises[currentExerciseIndex + 1];
+      label = `Next: ${exerciseMap.get(nextTeEntry.exerciseId)?.name ?? ''}`;
     } else {
       label = "That's the last set — cool down time";
     }
     setRestLabel(label);
 
+    // Set next exercise info for rest screen
+    if (!isLastSet) {
+      const currEx = exerciseMap.get(currTE.exerciseId);
+      if (currEx) {
+        const pref = prefsMap.get(currEx.id);
+        setRestNextExercise(currEx);
+        setRestNextTarget({
+          weight: currEx.isBodyweight ? null : (pref?.startingWeightKg ?? currEx.startingWeightKg),
+          reps: currTE.repRange,
+        });
+      } else {
+        setRestNextExercise(null);
+        setRestNextTarget(null);
+      }
+    } else if (!isLastExercise) {
+      const nextTeEntry = template.exercises[currentExerciseIndex + 1];
+      const nextEx = exerciseMap.get(nextTeEntry.exerciseId);
+      if (nextEx) {
+        const pref = prefsMap.get(nextEx.id);
+        setRestNextExercise(nextEx);
+        setRestNextTarget({
+          weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+          reps: nextTeEntry.repRange,
+        });
+      } else {
+        setRestNextExercise(null);
+        setRestNextTarget(null);
+      }
+    } else {
+      setRestNextExercise(null);
+      setRestNextTarget(null);
+    }
+
     if (!isLastSet) {
       incrementSetNumber();
       startRestTimer(getRestSecondsForExercise(currTE.exerciseId, exerciseMap));
     } else {
-      // Last set of this exercise — show feeling meter, then rest
       const exercise = exerciseMap.get(currTE.exerciseId) ?? staticExerciseMap.get(currTE.exerciseId);
       const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
 
@@ -249,9 +375,14 @@ export default function WorkoutActive() {
       }
 
       if (exercise) {
-        const pref = await db.exercisePrefs.get(exercise.id);
-        const startingWeight = pref?.startingWeightKg ?? exercise.startingWeightKg;
-        setFeelingQueue([{ exerciseId: exercise.id, exercise, startingWeightKg: startingWeight }]);
+        const pref = prefsMap.get(exercise.id);
+        setFeelingQueue([{
+          exerciseId: exercise.id,
+          exercise,
+          startingWeightKg: pref?.startingWeightKg ?? exercise.startingWeightKg,
+          startingReps: pref?.startingReps ?? currTE.repRange[0],
+          sessionId: sessionId ?? '',
+        }]);
         pendingRestRef.current = restSecs;
       } else {
         startRestTimer(restSecs);
@@ -260,7 +391,13 @@ export default function WorkoutActive() {
   };
 
   const handleFeelingDone = () => {
-    setFeelingQueue((q) => q.slice(1));
+    const newQueue = feelingQueue.slice(1);
+    setFeelingQueue(newQueue);
+    if (newQueue.length === 0 && pendingRestRef.current != null) {
+      const secs = pendingRestRef.current;
+      pendingRestRef.current = null;
+      startRestTimer(secs);
+    }
   };
 
   const handleSkipRest = () => {
@@ -286,17 +423,63 @@ export default function WorkoutActive() {
     );
   }
 
-  if (phase === 'warmup') {
+  // ── Preview phase ──────────────────────────────────────────────
+  if (phase === 'preview') {
     return (
-      <WarmupChecklist
-        category={template.category as ExerciseCategory}
-        onStart={handleStartWorkout}
+      <WorkoutPreview
+        template={template}
+        exerciseMap={exerciseMap}
+        stretches={stretches}
+        prefsMap={prefsMap}
+        onBegin={handleStartWorkout}
       />
     );
   }
 
-  if (phase === 'stretching') {
-    return <StretchChecklist onFinish={() => navigate('/')} />;
+  // ── Pre-stretch phase ──────────────────────────────────────────
+  if (phase === 'pre-stretch') {
+    const list = stretches.pre;
+    return (
+      <StretchStep
+        stretch={list[stretchIndex]}
+        index={stretchIndex}
+        total={list.length}
+        phase="pre"
+        nextStretch={list[stretchIndex + 1]}
+        onNext={handleStretchNext}
+      />
+    );
+  }
+
+  // ── Post-stretch phase ─────────────────────────────────────────
+  if (phase === 'post-stretch') {
+    const list = stretches.post;
+    return (
+      <StretchStep
+        stretch={list[stretchIndex]}
+        index={stretchIndex}
+        total={list.length}
+        phase="post"
+        nextStretch={list[stretchIndex + 1]}
+        onNext={handleStretchNext}
+      />
+    );
+  }
+
+  // ── Complete phase ─────────────────────────────────────────────
+  if (phase === 'complete') {
+    return (
+      <WorkoutComplete
+        stats={completionStats ?? {
+          durationSeconds: 0,
+          exercisesCompleted: 0,
+          totalSets: 0,
+          prsHit: 0,
+          totalVolumeKg: 0,
+        }}
+        onHome={() => navigate('/')}
+      />
+    );
   }
 
   // ── Feeling meter phase ────────────────────────────────────────
@@ -306,6 +489,8 @@ export default function WorkoutActive() {
       <FeelingMeter
         exercise={current.exercise}
         currentStartingWeightKg={current.startingWeightKg}
+        currentStartingReps={current.startingReps}
+        sessionId={current.sessionId}
         onDone={handleFeelingDone}
       />
     );
@@ -319,6 +504,9 @@ export default function WorkoutActive() {
           secondsRemaining={restSecondsRemaining}
           totalSeconds={restTotalSeconds}
           nextLabel={restLabel}
+          nextExercise={restNextExercise ?? undefined}
+          nextTargetWeight={restNextTarget?.weight}
+          nextTargetReps={restNextTarget?.reps}
           onSkip={handleSkipRest}
         />
       </div>

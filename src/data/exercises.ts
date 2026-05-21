@@ -282,11 +282,11 @@ export const exercises: Exercise[] = [
     category: 'core',
     type: 'isometric',
     muscles: ['core'],
-    defaultRepRange: [1, 1],
+    defaultRepRange: [30, 60],
     startingWeightKg: 0,
     restSeconds: 60,
     isBodyweight: true,
-    notes: 'Log seconds as reps (e.g. 45 = 45s hold)',
+    isTimed: true,
   },
   {
     id: 'farmers-carry',
@@ -318,11 +318,12 @@ export const exercises: Exercise[] = [
     category: 'core',
     type: 'isometric',
     muscles: ['full-body'],
-    defaultRepRange: [2, 2],
+    defaultRepRange: [30, 30],
     startingWeightKg: 0,
     restSeconds: 45,
     isBodyweight: true,
-    notes: 'Eyes closed, 30s per leg — proprioception for landing balance',
+    isTimed: true,
+    notes: 'Eyes closed — proprioception for landing balance. Timer per leg.',
   },
 
   // ─── Glutes ────────────────────────────────────────────────────

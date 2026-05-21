@@ -19,6 +19,7 @@ export type Exercise = {
   restSeconds: number;
   isBodyweight: boolean;
   isCable?: boolean;
+  isTimed?: boolean;   // reps field stores seconds; shows count-up timer in SetLogger
   videoUrl?: string;
   notes?: string;
 };
@@ -86,8 +87,17 @@ export type WarmupItem = {
 export type StretchItem = {
   id: string;
   name: string;
-  duration: string; // display string: "60s/side", "30s/leg"
+  duration: string;
   note?: string;
+};
+
+export type DayStretch = {
+  id: string;
+  name: string;
+  reps: string;        // display string: "30s/side", "15 reps", "8/side"
+  restSeconds: number; // rest after this stretch before the next
+  note?: string;
+  videoUrl?: string;
 };
 
 // ─── Exercise Preferences (stored in IndexedDB) ──────────────────
@@ -95,6 +105,7 @@ export type StretchItem = {
 export type ExercisePref = {
   exerciseId: string;
   startingWeightKg: number;
+  startingReps?: number;
 };
 
 // ─── UI / Store Types ────────────────────────────────────────────

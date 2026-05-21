@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { db } from '@/data/db';
 import { checkIsPR } from '@/lib/pr';
@@ -21,6 +21,12 @@ type Props = {
 
 const RIR_OPTIONS = [0, 1, 2, 3, 4, 5];
 
+function formatTime(secs: number): string {
+  const m = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${m}:${String(s).padStart(2, '0')}`;
+}
+
 export function SetLogger({
   templateExercise,
   exercise,
@@ -37,6 +43,12 @@ export function SetLogger({
   const [justLoggedPR, setJustLoggedPR] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Timed exercise state
+  const [timerRunning, setTimerRunning] = useState(false);
+  const [timerDisplaySeconds, setTimerDisplaySeconds] = useState(0);
+  const [timerLocked, setTimerLocked] = useState<number | null>(null);
+  const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   const lastData = useLastSetData(exercise.id, setNumber, sessionId);
   const exercisePref = useExercisePref(exercise.id);
 
@@ -46,6 +58,13 @@ export function SetLogger({
     setRepsStr('');
     setActiveField(null);
     setError(null);
+    setTimerRunning(false);
+    setTimerDisplaySeconds(0);
+    setTimerLocked(null);
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
   }, [exercise.id, setNumber]);
 
   // Default weight: lastData → exercisePref → exercise.startingWeightKg
@@ -54,12 +73,45 @@ export function SetLogger({
       ? lastData.weightKg
       : (exercisePref?.startingWeightKg ?? exercise.startingWeightKg);
 
-  // Default reps: lastData → lower bound of rep range
+  // Default reps: lastData → pref startingReps → lower bound of rep range
   const defaultReps =
-    lastData?.reps != null ? lastData.reps : templateExercise.repRange[0];
+    lastData?.reps != null
+      ? lastData.reps
+      : (exercisePref?.startingReps ?? templateExercise.repRange[0]);
 
   const resolvedWeight = weightStr !== '' ? parseFloat(weightStr) : defaultWeightKg;
-  const resolvedReps = repsStr !== '' ? parseInt(repsStr, 10) : defaultReps;
+  const resolvedReps = exercise.isTimed
+    ? (timerLocked ?? defaultReps)
+    : (repsStr !== '' ? parseInt(repsStr, 10) : defaultReps);
+
+  // Timer controls
+  const startTimer = () => {
+    if (timerRunning) return;
+    setTimerRunning(true);
+    setTimerLocked(null);
+    timerIntervalRef.current = setInterval(() => {
+      setTimerDisplaySeconds(prev => prev + 1);
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    setTimerRunning(false);
+    setTimerLocked(timerDisplaySeconds);
+  };
+
+  const resetTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    setTimerRunning(false);
+    setTimerDisplaySeconds(0);
+    setTimerLocked(null);
+  };
 
   const handleLogSet = async () => {
     const weight = resolvedWeight;
@@ -69,7 +121,11 @@ export function SetLogger({
       setError('Enter a weight');
       return;
     }
-    if (reps <= 0) {
+    if (exercise.isTimed && timerLocked === null) {
+      setError('Start and stop the timer first');
+      return;
+    }
+    if (!exercise.isTimed && reps <= 0) {
       setError('Enter reps');
       return;
     }
@@ -104,6 +160,7 @@ export function SetLogger({
 
     setWeightStr('');
     setRepsStr('');
+    resetTimer();
 
     onSetLogged(
       {
@@ -158,6 +215,14 @@ export function SetLogger({
                   Bodyweight
                 </span>
               )}
+              {exercise.isTimed && (
+                <span
+                  className="font-body uppercase tracking-widest"
+                  style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+                >
+                  Timed
+                </span>
+              )}
             </div>
             {exercise.videoUrl && (
               <div className="mt-2">
@@ -181,7 +246,9 @@ export function SetLogger({
         <div className="flex items-center gap-3">
           {lastData ? (
             <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-              Last: {lastData.weightKg > 0 ? `${lastData.weightKg}${exercise.isCable ? ' hole' : 'kg'} × ` : ''}{lastData.reps} reps
+              Last:{' '}
+              {lastData.weightKg > 0 ? `${lastData.weightKg}${exercise.isCable ? ' hole' : 'kg'} × ` : ''}
+              {exercise.isTimed ? `${lastData.reps}s` : `${lastData.reps} reps`}
             </p>
           ) : lastData === null ? (
             <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>
@@ -203,10 +270,9 @@ export function SetLogger({
           )}
         </div>
 
-        {/* Weight + Reps fields */}
-        <div className="flex gap-3">
-          {/* Weight field (hidden for pure bodyweight exercises) */}
-          {!exercise.isBodyweight && (
+        {/* Weight field (hidden for pure bodyweight exercises) */}
+        {!exercise.isBodyweight && (
+          <div className="flex gap-3">
             <button
               type="button"
               onClick={() => setActiveField('weight')}
@@ -234,37 +300,125 @@ export function SetLogger({
                 {exercise.isCable ? 'hole' : 'kg'}
               </span>
             </button>
-          )}
+          </div>
+        )}
 
-          {/* Reps field */}
-          <button
-            type="button"
-            onClick={() => setActiveField('reps')}
-            className="flex-1 flex flex-col items-center py-4 gap-1"
+        {/* Timed exercise — count-up timer */}
+        {exercise.isTimed ? (
+          <div
+            className="flex flex-col items-center gap-4 py-5"
             style={{
               background: 'var(--color-surface)',
-              border: activeField === 'reps'
-                ? '1px solid var(--color-accent)'
-                : 'var(--border-thin)',
+              border: timerLocked !== null ? '1px solid var(--color-accent)' : 'var(--border-thin)',
               borderRadius: 'var(--radius-md)',
             }}
           >
+            {/* Target hint */}
+            <p
+              className="font-body uppercase tracking-widest"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+            >
+              Target: {templateExercise.repRange[0]}–{templateExercise.repRange[1]}s
+            </p>
+
+            {/* Elapsed time */}
             <span
               className="font-mono"
               data-numeric
               style={{
-                fontSize: 'var(--text-h1)',
-                color: repsStr ? 'var(--color-text)' : 'var(--color-text-muted)',
-                minHeight: '2rem',
+                fontSize: 'clamp(3rem, 15vw, 6rem)',
+                color: timerLocked !== null ? 'var(--color-accent)' : 'var(--color-text)',
+                lineHeight: 1,
+                transition: 'color 200ms',
               }}
             >
-              {repsStr || String(defaultReps)}
+              {formatTime(timerLocked !== null && !timerRunning ? timerLocked : timerDisplaySeconds)}
             </span>
-            <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-              reps
-            </span>
-          </button>
-        </div>
+
+            {/* Controls */}
+            <div className="flex gap-3">
+              {!timerRunning && timerLocked === null ? (
+                <button
+                  type="button"
+                  onClick={startTimer}
+                  className="font-display uppercase tracking-wide px-8 py-3"
+                  style={{
+                    fontSize: 'var(--text-body)',
+                    background: 'var(--color-accent)',
+                    color: '#fff',
+                    borderRadius: 'var(--radius-md)',
+                    border: 'none',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Start
+                </button>
+              ) : timerRunning ? (
+                <button
+                  type="button"
+                  onClick={stopTimer}
+                  className="font-display uppercase tracking-wide px-8 py-3"
+                  style={{
+                    fontSize: 'var(--text-body)',
+                    background: 'var(--color-surface-2)',
+                    color: 'var(--color-text)',
+                    borderRadius: 'var(--radius-md)',
+                    border: '1px solid var(--color-accent)',
+                    letterSpacing: '0.05em',
+                  }}
+                >
+                  Stop
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={resetTimer}
+                  className="font-body px-6 py-3"
+                  style={{
+                    fontSize: 'var(--text-meta)',
+                    color: 'var(--color-text-muted)',
+                    border: 'var(--border-thin)',
+                    borderRadius: 'var(--radius-md)',
+                    background: 'transparent',
+                  }}
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+          </div>
+        ) : (
+          /* Normal reps field */
+          <div className="flex gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveField('reps')}
+              className="flex-1 flex flex-col items-center py-4 gap-1"
+              style={{
+                background: 'var(--color-surface)',
+                border: activeField === 'reps'
+                  ? '1px solid var(--color-accent)'
+                  : 'var(--border-thin)',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              <span
+                className="font-mono"
+                data-numeric
+                style={{
+                  fontSize: 'var(--text-h1)',
+                  color: repsStr ? 'var(--color-text)' : 'var(--color-text-muted)',
+                  minHeight: '2rem',
+                }}
+              >
+                {repsStr || String(defaultReps)}
+              </span>
+              <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                reps
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* RIR selector */}
         <div>

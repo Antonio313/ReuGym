@@ -54,10 +54,10 @@ export const templates: WorkoutTemplate[] = [
       { exerciseId: 'cable-woodchopper',    sets: 3, repRange: [10, 12], isSuperset: false },
       { exerciseId: 'weighted-sit-up',      sets: 3, repRange: [8, 12],  isSuperset: true,  supersetGroupId: 'core-A' },
       { exerciseId: 'pallof-press',         sets: 3, repRange: [10, 12], isSuperset: true,  supersetGroupId: 'core-A' },
-      { exerciseId: 'plank',                sets: 3, repRange: [1, 1],   isSuperset: false },
+      { exerciseId: 'plank',                sets: 3, repRange: [30, 60], isSuperset: false },
       { exerciseId: 'farmers-carry',        sets: 3, repRange: [3, 3],   isSuperset: false },
       { exerciseId: 'tennis-ball-wall-toss',sets: 2, repRange: [30, 30], isSuperset: false },
-      { exerciseId: 'single-leg-balance',   sets: 2, repRange: [2, 2],   isSuperset: false },
+      { exerciseId: 'single-leg-balance',   sets: 2, repRange: [30, 30], isSuperset: false },
     ],
   },
   {

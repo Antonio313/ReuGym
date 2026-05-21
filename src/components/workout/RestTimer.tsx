@@ -1,7 +1,13 @@
+import { VideoReference } from '@/components/workout/VideoReference';
+import type { Exercise } from '@/types';
+
 type Props = {
   secondsRemaining: number;
   totalSeconds: number;
   nextLabel: string;
+  nextExercise?: Exercise;
+  nextTargetWeight?: number | null;
+  nextTargetReps?: [number, number];
   onSkip: () => void;
 };
 
@@ -11,7 +17,7 @@ function formatTime(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, onSkip }: Props) {
+export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExercise, nextTargetWeight, nextTargetReps, onSkip }: Props) {
   const progress = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
 
   return (
@@ -62,8 +68,8 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, onSkip }:
         {formatTime(secondsRemaining)}
       </span>
 
-      {/* Next set label */}
-      <div className="text-center">
+      {/* Next set label + exercise details */}
+      <div className="text-center w-full">
         <p
           className="font-body"
           style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
@@ -76,6 +82,28 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, onSkip }:
         >
           {nextLabel}
         </p>
+
+        {/* Next exercise weight/reps */}
+        {nextExercise && nextTargetReps && (
+          <p
+            className="font-mono mt-2"
+            data-numeric
+            style={{ fontSize: 'var(--text-h3)', color: 'var(--color-accent)' }}
+          >
+            {nextTargetWeight == null
+              ? `Bodyweight · ${nextTargetReps[0]}–${nextTargetReps[1]} reps`
+              : nextExercise.isCable
+                ? `Hole ${nextTargetWeight} · ${nextTargetReps[0]}–${nextTargetReps[1]} reps`
+                : `${nextTargetWeight}kg × ${nextTargetReps[0]}–${nextTargetReps[1]}`}
+          </p>
+        )}
+
+        {/* Form video */}
+        {nextExercise?.videoUrl && (
+          <div className="mt-4 flex justify-center">
+            <VideoReference videoUrl={nextExercise.videoUrl} />
+          </div>
+        )}
       </div>
 
       {/* Skip */}

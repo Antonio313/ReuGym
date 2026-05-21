@@ -18,6 +18,7 @@ type WorkoutStore = {
 
   startSession: (template: WorkoutTemplate, sessionId: string, startedAt: number) => void;
   logSet: (set: ActiveSet) => void;
+  logSetSilent: (set: ActiveSet) => void; // log without flipping to 'resting' — for supersets
   nextExercise: () => void;
   incrementSetNumber: () => void;
   setExerciseAndSet: (index: number, setNumber: number) => void;
@@ -62,6 +63,10 @@ export const useWorkoutStore = create<WorkoutStore>()(
         status: 'resting',
       })),
 
+      logSetSilent: (newSet) => set((state) => ({
+        loggedSets: [...state.loggedSets, newSet],
+      })),
+
       nextExercise: () => set((state) => ({
         currentExerciseIndex: state.currentExerciseIndex + 1,
         currentSetNumber: 1,
@@ -76,6 +81,7 @@ export const useWorkoutStore = create<WorkoutStore>()(
         restTotalSeconds: seconds,
         restTimerActive: true,
         restEndTimestamp: Date.now() + seconds * 1000,
+        status: 'resting',
       }),
 
       tickRestTimer: () => {

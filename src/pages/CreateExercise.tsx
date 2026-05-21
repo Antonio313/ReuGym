@@ -15,9 +15,10 @@ const schema = z.object({
   category:         z.enum(['push', 'pull', 'legs', 'core', 'glutes', 'back']),
   type:             z.enum(['compound', 'accessory', 'plyo', 'isometric']),
   muscles:          z.array(z.string()).min(1, 'Select at least one muscle group'),
-  repRangeMin:      z.number().int().min(1).max(100),
-  repRangeMax:      z.number().int().min(1).max(100),
+  repRangeMin:      z.number().int().min(1).max(9999),
+  repRangeMax:      z.number().int().min(1).max(9999),
   isBodyweight:     z.boolean(),
+  isTimed:          z.boolean(),
   startingWeightKg: z.number().min(0),
   restSeconds:      z.number().int().min(15).max(600),
   notes:            z.string().max(200).optional(),
@@ -136,6 +137,7 @@ export default function CreateExercise() {
       repRangeMin:      8,
       repRangeMax:      12,
       isBodyweight:     false,
+      isTimed:          false,
       startingWeightKg: 0,
       restSeconds:      60,
     },
@@ -152,6 +154,7 @@ export default function CreateExercise() {
         repRangeMin:      existingExercise.defaultRepRange[0],
         repRangeMax:      existingExercise.defaultRepRange[1],
         isBodyweight:     existingExercise.isBodyweight,
+        isTimed:          existingExercise.isTimed ?? false,
         startingWeightKg: existingExercise.startingWeightKg,
         restSeconds:      existingExercise.restSeconds,
         notes:            existingExercise.notes ?? '',
@@ -161,6 +164,7 @@ export default function CreateExercise() {
   }, [existingExercise, reset]);
 
   const isBodyweight = watch('isBodyweight');
+  const isTimed = watch('isTimed');
   const selectedMuscles = watch('muscles');
   const selectedCategory = watch('category');
   const selectedType = watch('type');
@@ -188,6 +192,7 @@ export default function CreateExercise() {
         startingWeightKg: data.isBodyweight ? 0 : data.startingWeightKg,
         restSeconds:      data.restSeconds,
         isBodyweight:     data.isBodyweight,
+        isTimed:          data.isTimed || undefined,
         isCable:          existingExercise?.isCable,
         notes:            data.notes || undefined,
         videoUrl:         data.videoUrl || undefined,
@@ -360,16 +365,16 @@ export default function CreateExercise() {
           <FieldError message={errors.muscles?.message} />
         </div>
 
-        {/* Rep range */}
+        {/* Rep range / duration */}
         <div>
-          <FieldLabel>Default rep range</FieldLabel>
+          <FieldLabel>{isTimed ? 'Target duration (seconds)' : 'Default rep range'}</FieldLabel>
           <div className="flex items-center gap-3">
             <input
               {...register('repRangeMin', { valueAsNumber: true })}
               type="number"
               inputMode="numeric"
               min={1}
-              max={100}
+              max={9999}
               className="w-20 text-center font-mono py-3"
               data-numeric
               style={{
@@ -387,7 +392,7 @@ export default function CreateExercise() {
               type="number"
               inputMode="numeric"
               min={1}
-              max={100}
+              max={9999}
               className="w-20 text-center font-mono py-3"
               data-numeric
               style={{
@@ -399,7 +404,9 @@ export default function CreateExercise() {
                 outline: 'none',
               }}
             />
-            <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>reps</span>
+            <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>
+              {isTimed ? 'sec' : 'reps'}
+            </span>
           </div>
           <FieldError message={errors.repRangeMin?.message ?? errors.repRangeMax?.message} />
         </div>
@@ -474,6 +481,47 @@ export default function CreateExercise() {
               <FieldError message={errors.startingWeightKg?.message} />
             </div>
           )}
+        </div>
+
+        {/* Timed exercise toggle */}
+        <div>
+          <FieldLabel>Exercise tracking</FieldLabel>
+          <Controller
+            name="isTimed"
+            control={control}
+            render={({ field }) => (
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => field.onChange(!field.value)}
+                  className="relative flex-shrink-0"
+                  style={{
+                    width: '2.75rem',
+                    height: '1.5rem',
+                    borderRadius: '9999px',
+                    background: field.value ? 'var(--color-accent)' : 'var(--color-surface-2)',
+                    border: 'var(--border-thin)',
+                    transition: 'background 200ms',
+                  }}
+                >
+                  <span
+                    className="absolute top-0.5"
+                    style={{
+                      left: field.value ? 'calc(100% - 1.25rem)' : '0.25rem',
+                      width: '1rem',
+                      height: '1rem',
+                      borderRadius: '50%',
+                      background: '#fff',
+                      transition: 'left 200ms',
+                    }}
+                  />
+                </button>
+                <span className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                  Timed exercise (uses stopwatch instead of rep counter)
+                </span>
+              </div>
+            )}
+          />
         </div>
 
         {/* Rest time */}

@@ -1,16 +1,5 @@
 import type { WarmupItem, ExerciseCategory } from '../types';
 
-export const generalWarmup: WarmupItem[] = [
-  { id: 'w-jacks',    name: 'Jumping jacks or jump rope',             reps: '60 seconds' },
-  { id: 'w-arm-f',    name: 'Arm circles forward',                    reps: '10 reps' },
-  { id: 'w-arm-b',    name: 'Arm circles backward',                   reps: '10 reps' },
-  { id: 'w-swing-fb', name: 'Leg swings front-to-back',               reps: '10/leg' },
-  { id: 'w-swing-ss', name: 'Leg swings side-to-side',                reps: '10/leg' },
-  { id: 'w-wgs',      name: "World's greatest stretch",               reps: '3/side',    note: 'Moving, not holding' },
-  { id: 'w-catcow',   name: 'Cat-cow',                                reps: '8 reps' },
-  { id: 'w-squat',    name: 'Bodyweight squats',                      reps: '10 reps',   note: 'Progressively deeper' },
-];
-
 export const dayWarmups: Record<ExerciseCategory, WarmupItem[]> = {
   push: [
     { id: 'wp-pull-aparts', name: 'Band pull-aparts',                  reps: '15 reps' },
