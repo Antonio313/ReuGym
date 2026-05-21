@@ -41,6 +41,15 @@ export default function TemplateEditor() {
     saveTemplate(updated);
   };
 
+  // Clears the superset state of the exercise at `index` and its pair partner (if any)
+  const clearSupersetForIndex = (exercises: TemplateExercise[], index: number): TemplateExercise[] => {
+    const groupId = exercises[index].supersetGroupId;
+    if (!groupId) return exercises;
+    return exercises.map((e) =>
+      e.supersetGroupId === groupId ? { ...e, isSuperset: false, supersetGroupId: undefined } : e,
+    );
+  };
+
   const adjustSets = (index: number, delta: number) => {
     const ex = template.exercises.map((entry, i) => {
       if (i !== index) return entry;
@@ -51,20 +60,49 @@ export default function TemplateEditor() {
 
   const moveUp = (index: number) => {
     if (index === 0) return;
-    const ex = [...template.exercises];
+    let ex = [...template.exercises];
+    ex = clearSupersetForIndex(ex, index - 1);
+    ex = clearSupersetForIndex(ex, index);
     [ex[index - 1], ex[index]] = [ex[index], ex[index - 1]];
     update(ex);
   };
 
   const moveDown = (index: number) => {
     if (index === template.exercises.length - 1) return;
-    const ex = [...template.exercises];
+    let ex = [...template.exercises];
+    ex = clearSupersetForIndex(ex, index);
+    ex = clearSupersetForIndex(ex, index + 1);
     [ex[index], ex[index + 1]] = [ex[index + 1], ex[index]];
     update(ex);
   };
 
   const remove = (index: number) => {
-    const ex = template.exercises.filter((_, i) => i !== index);
+    let ex = [...template.exercises];
+    ex = clearSupersetForIndex(ex, index);
+    ex = ex.filter((_, i) => i !== index);
+    update(ex);
+  };
+
+  const toggleSuperset = (index: number) => {
+    if (index >= template.exercises.length - 1) return;
+    let ex = [...template.exercises];
+    const a = ex[index];
+    const b = ex[index + 1];
+    const alreadyPaired =
+      a.isSuperset && b.isSuperset &&
+      a.supersetGroupId != null &&
+      a.supersetGroupId === b.supersetGroupId;
+
+    if (alreadyPaired) {
+      ex[index]     = { ...a, isSuperset: false, supersetGroupId: undefined };
+      ex[index + 1] = { ...b, isSuperset: false, supersetGroupId: undefined };
+    } else {
+      ex = clearSupersetForIndex(ex, index);
+      ex = clearSupersetForIndex(ex, index + 1);
+      const groupId = `${template.id}-${nanoid(6)}`;
+      ex[index]     = { ...ex[index],     isSuperset: true, supersetGroupId: groupId };
+      ex[index + 1] = { ...ex[index + 1], isSuperset: true, supersetGroupId: groupId };
+    }
     update(ex);
   };
 
@@ -163,106 +201,144 @@ export default function TemplateEditor() {
           const name = exercise?.name ?? entry.exerciseId;
           const isFirst = index === 0;
           const isLast = index === template.exercises.length - 1;
+          const nextEntry = template.exercises[index + 1];
+          const isPairedWithNext =
+            !isLast &&
+            entry.isSuperset &&
+            nextEntry?.isSuperset &&
+            entry.supersetGroupId != null &&
+            entry.supersetGroupId === nextEntry.supersetGroupId;
 
           return (
-            <div
-              key={`${entry.exerciseId}-${index}`}
-              className="flex items-center gap-2 py-3"
-              style={{ borderBottom: 'var(--border-thin)' }}
-            >
-              {/* Reorder buttons */}
-              <div className="flex flex-col gap-1">
-                <button
-                  onClick={() => moveUp(index)}
-                  disabled={isFirst}
-                  style={{ color: isFirst ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}
-                >
-                  <ArrowUp size={16} />
-                </button>
-                <button
-                  onClick={() => moveDown(index)}
-                  disabled={isLast}
-                  style={{ color: isLast ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}
-                >
-                  <ArrowDown size={16} />
-                </button>
-              </div>
+            <div key={`${entry.exerciseId}-${index}`}>
+              {/* Exercise row */}
+              <div
+                className="flex items-center gap-2 py-3"
+                style={{
+                  borderBottom: isPairedWithNext ? 'none' : 'var(--border-thin)',
+                  borderLeft: entry.isSuperset ? '2px solid var(--color-accent)' : '2px solid transparent',
+                  paddingLeft: entry.isSuperset ? '0.5rem' : undefined,
+                }}
+              >
+                {/* Reorder buttons */}
+                <div className="flex flex-col gap-1">
+                  <button
+                    onClick={() => moveUp(index)}
+                    disabled={isFirst}
+                    style={{ color: isFirst ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}
+                  >
+                    <ArrowUp size={16} />
+                  </button>
+                  <button
+                    onClick={() => moveDown(index)}
+                    disabled={isLast}
+                    style={{ color: isLast ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}
+                  >
+                    <ArrowDown size={16} />
+                  </button>
+                </div>
 
-              {/* Exercise info */}
-              <div className="flex-1 min-w-0">
-                <p
-                  className="font-body"
-                  style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}
-                >
-                  {name}
-                </p>
-                <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                  {/* Sets stepper */}
-                  <div className="flex items-center gap-1">
-                    <button
-                      onClick={() => adjustSets(index, -1)}
-                      disabled={entry.sets <= 1}
-                      className="font-mono"
-                      style={{
-                        fontSize: 'var(--text-meta)',
-                        width: '1.5rem',
-                        height: '1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: 'var(--border-thin)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: entry.sets <= 1 ? 'var(--color-text-faint)' : 'var(--color-text-muted)',
-                        background: 'var(--color-surface)',
-                      }}
-                    >
-                      −
-                    </button>
+                {/* Exercise info */}
+                <div className="flex-1 min-w-0">
+                  <p className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                    {name}
+                  </p>
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                    {/* Sets stepper */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => adjustSets(index, -1)}
+                        disabled={entry.sets <= 1}
+                        className="font-mono"
+                        style={{
+                          fontSize: 'var(--text-meta)',
+                          width: '1.5rem',
+                          height: '1.5rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: 'var(--border-thin)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: entry.sets <= 1 ? 'var(--color-text-faint)' : 'var(--color-text-muted)',
+                          background: 'var(--color-surface)',
+                        }}
+                      >
+                        −
+                      </button>
+                      <span
+                        className="font-mono"
+                        data-numeric
+                        style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)', minWidth: '2.5rem', textAlign: 'center' }}
+                      >
+                        {entry.sets} sets
+                      </span>
+                      <button
+                        onClick={() => adjustSets(index, 1)}
+                        disabled={entry.sets >= 10}
+                        className="font-mono"
+                        style={{
+                          fontSize: 'var(--text-meta)',
+                          width: '1.5rem',
+                          height: '1.5rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          border: 'var(--border-thin)',
+                          borderRadius: 'var(--radius-sm)',
+                          color: entry.sets >= 10 ? 'var(--color-text-faint)' : 'var(--color-text-muted)',
+                          background: 'var(--color-surface)',
+                        }}
+                      >
+                        +
+                      </button>
+                    </div>
                     <span
                       className="font-mono"
                       data-numeric
-                      style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)', minWidth: '2.5rem', textAlign: 'center' }}
+                      style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
                     >
-                      {entry.sets} sets
+                      · {entry.repRange[0]}–{entry.repRange[1]} reps
                     </span>
-                    <button
-                      onClick={() => adjustSets(index, 1)}
-                      disabled={entry.sets >= 10}
-                      className="font-mono"
-                      style={{
-                        fontSize: 'var(--text-meta)',
-                        width: '1.5rem',
-                        height: '1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        border: 'var(--border-thin)',
-                        borderRadius: 'var(--radius-sm)',
-                        color: entry.sets >= 10 ? 'var(--color-text-faint)' : 'var(--color-text-muted)',
-                        background: 'var(--color-surface)',
-                      }}
-                    >
-                      +
-                    </button>
                   </div>
-                  <span
-                    className="font-mono"
-                    data-numeric
-                    style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-                  >
-                    · {entry.repRange[0]}–{entry.repRange[1]} reps
-                    {entry.isSuperset && <span style={{ color: 'var(--color-accent)' }}> · SS</span>}
-                  </span>
                 </div>
+
+                {/* Delete */}
+                <button
+                  onClick={() => remove(index)}
+                  style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}
+                >
+                  <Trash size={18} />
+                </button>
               </div>
 
-              {/* Delete */}
-              <button
-                onClick={() => remove(index)}
-                style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}
-              >
-                <Trash size={18} />
-              </button>
+              {/* Superset connector between adjacent exercises */}
+              {!isLast && (
+                <div
+                  className="flex items-center justify-center"
+                  style={{
+                    padding: '4px 0',
+                    borderBottom: 'var(--border-thin)',
+                    borderLeft: isPairedWithNext ? '2px solid var(--color-accent)' : '2px solid transparent',
+                    paddingLeft: isPairedWithNext ? '0.5rem' : undefined,
+                  }}
+                >
+                  <button
+                    onClick={() => toggleSuperset(index)}
+                    className="font-body"
+                    style={{
+                      fontSize: 'var(--text-micro)',
+                      letterSpacing: '0.08em',
+                      padding: '3px 10px',
+                      borderRadius: '999px',
+                      background: isPairedWithNext ? 'var(--color-accent-dim)' : 'transparent',
+                      color: isPairedWithNext ? 'var(--color-accent)' : 'var(--color-text-faint)',
+                      border: isPairedWithNext ? '1px solid var(--color-accent)' : '1px dashed var(--color-border)',
+                    }}
+                  >
+                    {isPairedWithNext ? '× SUPERSET' : '+ SUPERSET'}
+                  </button>
+                </div>
+              )}
             </div>
           );
         })}

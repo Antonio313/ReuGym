@@ -238,6 +238,12 @@ export function StretchStep({ stretch, index, total, phase, nextStretch, onNext 
               </p>
             )}
 
+            {stretch.videoUrl && (
+              <div className="mb-4">
+                <VideoReference videoUrl={stretch.videoUrl} />
+              </div>
+            )}
+
             {/* Optional stretch timer for timed stretches */}
             {parsedDuration !== null && (
               <div
