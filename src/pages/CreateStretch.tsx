@@ -27,7 +27,7 @@ export default function CreateStretch() {
   const isEditing = Boolean(id);
 
   const existing = useLiveQuery(
-    () => (id ? db.stretchLibrary.get(id) : Promise.resolve(undefined)),
+    () => (id ? db.stretchLibrary.get(id) : undefined),
     [id],
   );
 
