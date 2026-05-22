@@ -61,7 +61,7 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
   const isWeighted = weightInc > 0;
 
   const isEasySelection  = selected === 'easy' || selected === 'medium-easy';
-  const rirConditionMet  = isEasySelection && avgRIR != null && avgRIR > 2;
+  const rirConditionMet  = !exercise.isTimed && isEasySelection && avgRIR != null && avgRIR > 2;
 
   // Weight: from feeling only
   const weightDelta    = selected ? FEELING_STEPS[selected] * weightInc : 0;
@@ -160,10 +160,10 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
                 Weight
               </span>
               <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-h3)', color: 'var(--color-accent)' }}>
-                {suggestedWeight}{exercise.isCable ? ' hole' : ' kg'}
+                {suggestedWeight} kg
               </span>
               <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>
-                ({weightDelta >= 0 ? '+' : ''}{weightDelta}{exercise.isCable ? '' : ' kg'})
+                ({weightDelta >= 0 ? '+' : ''}{weightDelta} kg)
               </span>
             </div>
           )}

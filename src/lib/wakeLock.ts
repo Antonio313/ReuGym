@@ -1,10 +1,6 @@
-import { useEffect } from 'react';
+import NoSleep from 'nosleep.js';
 
-export function useWakeLock(active: boolean): void {
-  useEffect(() => {
-    if (!active || !('wakeLock' in navigator)) return;
-    let lock: WakeLockSentinel | null = null;
-    navigator.wakeLock.request('screen').then((l) => { lock = l; }).catch(() => {});
-    return () => { lock?.release().catch(() => {}); };
-  }, [active]);
-}
+const noSleep = new NoSleep();
+
+export const enableWakeLock  = () => noSleep.enable().catch(() => {});
+export const disableWakeLock = () => noSleep.disable();

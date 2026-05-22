@@ -11,7 +11,6 @@ type Props = {
 function weightLabel(exercise: Exercise, pref: ExercisePref | undefined): string {
   if (exercise.isBodyweight) return 'Bodyweight';
   const w = pref?.startingWeightKg ?? exercise.startingWeightKg;
-  if (exercise.isCable) return `Hole ${w}`;
   return `${w}kg`;
 }
 

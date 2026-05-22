@@ -19,7 +19,6 @@ type Props = {
   onSetLogged: (set: ActiveSet, isPR: boolean) => void;
 };
 
-const RIR_OPTIONS = [0, 1, 2, 3, 4, 5];
 
 function formatTime(secs: number): string {
   const m = Math.floor(secs / 60);
@@ -38,7 +37,8 @@ export function SetLogger({
   const [weightStr, setWeightStr] = useState('');
   const [repsStr, setRepsStr] = useState('');
   const [activeField, setActiveField] = useState<'weight' | 'reps' | null>(null);
-  const [rir, setRir] = useState(2);
+  const rirOptions = exercise.isTimed ? [0, 5, 10, 15, 20, 30] : [0, 1, 2, 3, 4, 5];
+  const [rir, setRir] = useState(() => exercise.isTimed ? 10 : 2);
   const [isWarmup, setIsWarmup] = useState(false);
   const [justLoggedPR, setJustLoggedPR] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -247,7 +247,7 @@ export function SetLogger({
           {lastData ? (
             <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
               Last:{' '}
-              {lastData.weightKg > 0 ? `${lastData.weightKg}${exercise.isCable ? ' hole' : 'kg'} × ` : ''}
+              {lastData.weightKg > 0 ? `${lastData.weightKg}kg × ` : ''}
               {exercise.isTimed ? `${lastData.reps}s` : `${lastData.reps} reps`}
             </p>
           ) : lastData === null ? (
@@ -297,7 +297,7 @@ export function SetLogger({
                 {weightStr || String(defaultWeightKg)}
               </span>
               <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                {exercise.isCable ? 'hole' : 'kg'}
+                kg
               </span>
             </button>
           </div>
@@ -423,10 +423,10 @@ export function SetLogger({
         {/* RIR selector */}
         <div>
           <p className="font-body mb-2" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            RIR
+            {exercise.isTimed ? 'SIR' : 'RIR'}
           </p>
           <div className="flex gap-2">
-            {RIR_OPTIONS.map((r) => (
+            {rirOptions.map((r) => (
               <button
                 key={r}
                 type="button"

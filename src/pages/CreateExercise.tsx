@@ -475,7 +475,7 @@ export default function CreateExercise() {
                   }}
                 />
                 <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>
-                  {existingExercise?.isCable ? 'hole' : 'kg'}
+                  kg
                 </span>
               </div>
               <FieldError message={errors.startingWeightKg?.message} />

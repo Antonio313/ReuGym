@@ -46,7 +46,6 @@ export const exercises: Exercise[] = [
     restSeconds: 60,
     isBodyweight: false,
     isCable: true,
-    notes: 'Log cable hole number as weight',
   },
   {
     id: 'db-lateral-raise',

@@ -92,9 +92,7 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExerc
           >
             {nextTargetWeight == null
               ? `Bodyweight · ${nextTargetReps[0]}–${nextTargetReps[1]} reps`
-              : nextExercise.isCable
-                ? `Hole ${nextTargetWeight} · ${nextTargetReps[0]}–${nextTargetReps[1]} reps`
-                : `${nextTargetWeight}kg × ${nextTargetReps[0]}–${nextTargetReps[1]}`}
+              : `${nextTargetWeight}kg × ${nextTargetReps[0]}–${nextTargetReps[1]}`}
           </p>
         )}
 

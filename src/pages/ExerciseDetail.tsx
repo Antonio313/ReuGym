@@ -353,7 +353,7 @@ export default function ExerciseDetail() {
                 Starting weight
               </p>
               <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                {exercise.startingWeightKg}{exercise.isCable ? ' hole' : 'kg'}
+                {exercise.startingWeightKg}kg
               </p>
             </div>
           )}

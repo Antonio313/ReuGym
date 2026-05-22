@@ -12,7 +12,7 @@ import { useTemplate } from '@/hooks/useTemplates';
 import { useExercises } from '@/hooks/useExercises';
 import { useDayStretches } from '@/hooks/useDayStretches';
 import { useWorkoutStore } from '@/store/workoutStore';
-import { useWakeLock } from '@/lib/wakeLock';
+import { enableWakeLock, disableWakeLock } from '@/lib/wakeLock';
 import { db } from '@/data/db';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { exerciseMap as staticExerciseMap } from '@/data/exercises';
@@ -42,6 +42,7 @@ export default function WorkoutActive() {
   const [showRestoredBanner, setShowRestoredBanner] = useState(false);
   const [feelingQueue, setFeelingQueue] = useState<FeelingEntry[]>([]);
   const [completionStats, setCompletionStats] = useState<CompletionStats | null>(null);
+  const [showUpcoming, setShowUpcoming] = useState(false);
   const [restNextExercise, setRestNextExercise] = useState<Exercise | null>(null);
   const [restNextTarget, setRestNextTarget] = useState<{ weight: number | null; reps: [number, number] } | null>(null);
   // pendingRest holds the seconds to start after feeling queue drains
@@ -83,8 +84,6 @@ export default function WorkoutActive() {
     resetSession,
   } = store;
 
-  // Prevent screen sleep during active workout
-  useWakeLock(phase !== 'preview' && phase !== 'complete');
 
   const prevStatus = useRef(status);
   const mountedRef = useRef(false);
@@ -133,6 +132,7 @@ export default function WorkoutActive() {
 
 
   const finishWorkout = async () => {
+    disableWakeLock();
     const completedAt = Date.now();
     const durationSeconds = sessionStartedAt
       ? Math.round((completedAt - sessionStartedAt) / 1000)
@@ -172,6 +172,7 @@ export default function WorkoutActive() {
     const now = Date.now();
     await db.sessions.add({ id, templateId: template.id, startedAt: now });
     startSession(template, id, now);
+    enableWakeLock();
     setStretchIndex(0);
     setPhase('pre-stretch');
   };
@@ -191,6 +192,7 @@ export default function WorkoutActive() {
   };
 
   const handleSetLogged = async (activeSet: ActiveSet, _isPR: boolean) => {
+    if (activeSet.isWarmup) return;
     if (!template) return;
 
     const currTE = template.exercises[currentExerciseIndex];
@@ -405,6 +407,7 @@ export default function WorkoutActive() {
   };
 
   const handleAbandon = () => {
+    disableWakeLock();
     resetSession();
     navigate('/');
   };
@@ -594,6 +597,13 @@ export default function WorkoutActive() {
                 {currentExerciseIndex + 1}/{template.exercises.length}
               </span>
               <button
+                onClick={() => setShowUpcoming(true)}
+                className="font-body"
+                style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
+              >
+                Exercises
+              </button>
+              <button
                 onClick={() => setConfirmingQuit(true)}
                 className="font-body"
                 style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}
@@ -604,6 +614,77 @@ export default function WorkoutActive() {
           </>
         )}
       </header>
+
+      {showUpcoming && (
+        <div
+          className="fixed inset-0 z-50 overflow-y-auto"
+          style={{ background: 'var(--color-bg)', maxWidth: 'var(--max-content-width)', margin: '0 auto' }}
+        >
+          <div
+            className="flex items-center justify-between px-4 py-4"
+            style={{ borderBottom: 'var(--border-thin)' }}
+          >
+            <span className="font-display" style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)', letterSpacing: '0.05em' }}>
+              {template.shortLabel}
+            </span>
+            <button
+              onClick={() => setShowUpcoming(false)}
+              style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-h2)', lineHeight: 1 }}
+            >
+              ✕
+            </button>
+          </div>
+          <div className="flex flex-col px-4 py-3">
+            {template.exercises.map((te, i) => {
+              const ex = exerciseMap.get(te.exerciseId);
+              const isCurrent = i === currentExerciseIndex;
+              const isDone = i < currentExerciseIndex;
+              return (
+                <div
+                  key={te.exerciseId + i}
+                  className="flex items-center gap-3 py-3"
+                  style={{ borderBottom: 'var(--border-thin)', opacity: isDone ? 0.3 : 1 }}
+                >
+                  <span
+                    className="font-mono flex-shrink-0"
+                    data-numeric
+                    style={{
+                      fontSize: 'var(--text-meta)',
+                      color: isCurrent ? 'var(--color-accent)' : 'var(--color-text-faint)',
+                      width: '1.25rem',
+                    }}
+                  >
+                    {i + 1}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p
+                      className="font-body truncate"
+                      style={{ fontSize: 'var(--text-body)', color: isCurrent ? 'var(--color-accent)' : 'var(--color-text)' }}
+                    >
+                      {ex?.name ?? te.exerciseId}
+                    </p>
+                    <p
+                      className="font-mono"
+                      data-numeric
+                      style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
+                    >
+                      {te.sets} × {te.repRange[0]}–{te.repRange[1]}{ex?.isTimed ? 's' : ' reps'}
+                    </p>
+                  </div>
+                  {isCurrent && (
+                    <span
+                      className="font-body uppercase tracking-widest flex-shrink-0"
+                      style={{ fontSize: 'var(--text-micro)', color: 'var(--color-accent)' }}
+                    >
+                      Now
+                    </span>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       <SetLogger
         templateExercise={currentTemplateExercise}
