@@ -1,10 +1,11 @@
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { ArrowLeft, Trophy, PencilSimple } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { db } from '@/data/db';
-import { useExercises } from '@/hooks/useExercises';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
+import { useExercises, useStretches } from '@/hooks/useExercises';
 import type { LoggedSet, WorkoutSession } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -215,34 +216,76 @@ export default function ExerciseDetail() {
   const navigate = useNavigate();
 
   const allExercises = useExercises();
-  const exercise = allExercises.find((e) => e.id === exerciseId);
+  const allStretchExercises = useStretches();
+  const exercise = [...allExercises, ...allStretchExercises].find((e) => e.id === exerciseId);
 
-  const data = useLiveQuery(async () => {
-    if (!exerciseId) return null;
+  type DetailData = {
+    allSets: LoggedSet[];
+    sessions: WorkoutSession[];
+    bySession: Map<string, LoggedSet[]>;
+  };
+  const [data, setData] = useState<DetailData | null | undefined>(undefined);
 
-    const allSets = await db.sets
-      .where('exerciseId')
-      .equals(exerciseId)
-      .sortBy('completedAt');
+  useEffect(() => {
+    if (!exerciseId) { setData(null); return; }
+    const user = getLocalSession();
+    if (!user) { setData({ allSets: [], sessions: [], bySession: new Map() }); return; }
 
-    if (allSets.length === 0) return { allSets: [], sessions: [], bySession: new Map() };
+    const load = async () => {
+      const { data: setRows } = await supabase
+        .from('logged_sets')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('exercise_id', exerciseId)
+        .order('completed_at');
 
-    const bySession = new Map<string, LoggedSet[]>();
-    for (const s of allSets) {
-      const arr = bySession.get(s.sessionId) ?? [];
-      arr.push(s);
-      bySession.set(s.sessionId, arr);
-    }
+      if (!setRows || setRows.length === 0) {
+        setData({ allSets: [], sessions: [], bySession: new Map() });
+        return;
+      }
 
-    const sessionIds = [...bySession.keys()];
-    const sessions = await db.sessions
-      .where('id')
-      .anyOf(sessionIds)
-      .filter((s) => s.completedAt != null)
-      .toArray();
-    sessions.sort((a, b) => a.startedAt - b.startedAt);
+      const allSets: LoggedSet[] = setRows.map((r) => ({
+        id:          r.id as string,
+        sessionId:   r.session_id as string,
+        exerciseId:  r.exercise_id as string,
+        setNumber:   r.set_number as number,
+        weightKg:    r.weight_kg as number,
+        reps:        r.reps as number,
+        rir:         r.rir as number,
+        isWarmup:    r.is_warmup as boolean,
+        isPR:        r.is_pr as boolean,
+        completedAt: r.completed_at as number,
+      }));
 
-    return { allSets, sessions, bySession };
+      const bySession = new Map<string, LoggedSet[]>();
+      for (const s of allSets) {
+        const arr = bySession.get(s.sessionId) ?? [];
+        arr.push(s);
+        bySession.set(s.sessionId, arr);
+      }
+
+      const sessionIds = [...bySession.keys()];
+      const { data: sessionRows } = await supabase
+        .from('workout_sessions')
+        .select('*')
+        .in('id', sessionIds)
+        .not('completed_at', 'is', null);
+
+      const sessions: WorkoutSession[] = (sessionRows ?? [])
+        .map((r) => ({
+          id:              r.id as string,
+          templateId:      r.template_id as string,
+          startedAt:       r.started_at as number,
+          completedAt:     r.completed_at as number | undefined,
+          durationSeconds: r.duration_seconds as number | undefined,
+          notes:           r.notes as string | undefined,
+        }))
+        .sort((a, b) => a.startedAt - b.startedAt);
+
+      setData({ allSets, sessions, bySession });
+    };
+
+    void load();
   }, [exerciseId]);
 
   if (!exercise) {

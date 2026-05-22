@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { ArrowLeft, Trash } from '@phosphor-icons/react';
-import { createExercise, updateExercise, deleteCustomExercise, isStaticExercise, useExercises } from '@/hooks/useExercises';
+import { createExercise, updateExercise, deleteCustomExercise, isStaticExercise, useExercises, useStretches } from '@/hooks/useExercises';
 import type { ExerciseCategory, ExerciseType, MuscleGroup } from '@/types';
 
 // ─── Schema ─────────────────────────────────────────────────────
@@ -36,6 +36,11 @@ const CATEGORIES: { value: ExerciseCategory; label: string }[] = [
   { value: 'core',   label: 'Core' },
   { value: 'glutes', label: 'Glutes' },
   { value: 'back',   label: 'Back' },
+];
+
+const STRETCH_CATEGORIES: { value: ExerciseCategory; label: string }[] = [
+  ...CATEGORIES,
+  { value: 'general', label: 'General' },
 ];
 
 const TYPES: { value: ExerciseType; label: string }[] = [
@@ -114,10 +119,15 @@ export default function CreateExercise() {
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isEditMode = exerciseId !== undefined;
+  const isStretchParam = searchParams.get('isStretch') === 'true';
 
-  // In edit mode, find the exercise to pre-populate
+  // In edit mode, find the exercise to pre-populate (search both exercises and stretches)
   const allExercises = useExercises();
-  const existingExercise = isEditMode ? allExercises.find((e) => e.id === exerciseId) : undefined;
+  const allStretchExercises = useStretches();
+  const existingExercise = isEditMode
+    ? [...allExercises, ...allStretchExercises].find((e) => e.id === exerciseId)
+    : undefined;
+  const isStretch = isStretchParam || (existingExercise?.isStretch ?? false);
   const isBuiltIn = isEditMode && exerciseId ? isStaticExercise(exerciseId) : false;
 
   const {
@@ -136,10 +146,10 @@ export default function CreateExercise() {
       muscles:          [],
       repRangeMin:      8,
       repRangeMax:      12,
-      isBodyweight:     false,
+      isBodyweight:     isStretch ? true : false,
       isTimed:          false,
       startingWeightKg: 0,
-      restSeconds:      60,
+      restSeconds:      isStretch ? 15 : 60,
     },
   });
 
@@ -193,7 +203,8 @@ export default function CreateExercise() {
         restSeconds:      data.restSeconds,
         isBodyweight:     data.isBodyweight,
         isTimed:          data.isTimed || undefined,
-        isCable:          existingExercise?.isCable,
+        isCable:          isStretch ? undefined : existingExercise?.isCable,
+        isStretch:        isStretch || undefined,
         notes:            data.notes || undefined,
         videoUrl:         data.videoUrl || undefined,
       };
@@ -246,7 +257,7 @@ export default function CreateExercise() {
           <ArrowLeft size={22} />
         </button>
         <span className="font-display flex-1 min-w-0 truncate" style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)' }}>
-          {isEditMode ? 'EDIT EXERCISE' : 'NEW EXERCISE'}
+          {isEditMode ? (isStretch ? 'EDIT STRETCH' : 'EDIT EXERCISE') : (isStretch ? 'NEW STRETCH' : 'NEW EXERCISE')}
         </span>
         {/* Delete button — only for custom (non-built-in) exercises */}
         {isEditMode && !isBuiltIn && (
@@ -320,7 +331,7 @@ export default function CreateExercise() {
         <div>
           <FieldLabel>Category</FieldLabel>
           <div className="flex flex-wrap gap-2">
-            {CATEGORIES.map(({ value, label }) => (
+            {(isStretch ? STRETCH_CATEGORIES : CATEGORIES).map(({ value, label }) => (
               <PillButton
                 key={value}
                 active={selectedCategory === value}

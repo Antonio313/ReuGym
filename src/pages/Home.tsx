@@ -1,11 +1,11 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { PencilSimple } from '@phosphor-icons/react';
 import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
-import { SkeletonCard } from '@/components/shared/SkeletonCard';
-import { useTemplates, defaultTemplates } from '@/hooks/useTemplates';
-import { db } from '@/data/db';
+import { useTemplates } from '@/hooks/useTemplates';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
 import type { WorkoutTemplate } from '@/types';
 
 const DAY_LABEL_ORDER = ['push', 'pull', 'legs', 'core', 'glutes', 'back'] as const;
@@ -107,25 +107,28 @@ export default function Home() {
   const isSunday = new Date().getDay() === 0;
   const navigate = useNavigate();
 
-  // Live from Dexie; fallback to static while loading
-  const liveTemplates = useTemplates();
-  const templates = liveTemplates ?? defaultTemplates;
+  const templates = useTemplates();
 
-  const lastSessions = useLiveQuery(async () => {
-    const results: Record<string, number> = {};
-    for (const template of templates) {
-      const sessions = await db.sessions
-        .where('templateId')
-        .equals(template.id)
-        .filter((s) => s.completedAt != null)
-        .sortBy('startedAt');
-      const last = sessions[sessions.length - 1];
-      if (last?.completedAt) {
-        results[template.id] = last.completedAt;
-      }
-    }
-    return results;
-  }, [templates]);
+  const [lastSessions, setLastSessions] = useState<Record<string, number>>({});
+
+  useEffect(() => {
+    const user = getLocalSession();
+    if (!user) return;
+    supabase
+      .from('workout_sessions')
+      .select('template_id, completed_at')
+      .eq('user_id', user.id)
+      .not('completed_at', 'is', null)
+      .order('started_at', { ascending: false })
+      .then(({ data }) => {
+        const results: Record<string, number> = {};
+        for (const row of data ?? []) {
+          const tId = row.template_id as string;
+          if (!results[tId]) results[tId] = row.completed_at as number;
+        }
+        setLastSessions(results);
+      });
+  }, []);
 
   const orderedTemplates = DAY_LABEL_ORDER
     .map((cat) => templates.find((t) => t.category === cat))
@@ -137,22 +140,15 @@ export default function Home() {
 
       <main className="flex flex-col gap-3 p-4">
         {/* Day cards grid */}
-        {liveTemplates === undefined ? (
-          // Loading skeletons
-          <div className="grid grid-cols-2 gap-3">
-            {[0, 1, 2, 3].map((i) => <SkeletonCard key={i} height="9rem" />)}
-          </div>
-        ) : (
-          <div className="grid grid-cols-2 gap-3">
-            {orderedTemplates.map((template) => (
-              <DayCard
-                key={template.id}
-                template={template}
-                lastSessionDate={lastSessions?.[template.id]}
-              />
-            ))}
-          </div>
-        )}
+        <div className="grid grid-cols-2 gap-3">
+          {orderedTemplates.map((template) => (
+            <DayCard
+              key={template.id}
+              template={template}
+              lastSessionDate={lastSessions[template.id]}
+            />
+          ))}
+        </div>
 
         {/* Sunday body stats CTA */}
         {isSunday && (

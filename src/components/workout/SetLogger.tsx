@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
-import { db } from '@/data/db';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
 import { checkIsPR } from '@/lib/pr';
 import { useLastSetData } from '@/hooks/useLastSetData';
 import { useExercisePref } from '@/hooks/useExercisePref';
@@ -146,11 +147,26 @@ export function SetLogger({
       completedAt: Date.now(),
     };
 
-    await db.sets.add(loggedSet);
+    const user = getLocalSession();
+    if (user) {
+      await supabase.from('logged_sets').insert({
+        id:           loggedSet.id,
+        user_id:      user.id,
+        session_id:   loggedSet.sessionId,
+        exercise_id:  loggedSet.exerciseId,
+        set_number:   loggedSet.setNumber,
+        weight_kg:    loggedSet.weightKg,
+        reps:         loggedSet.reps,
+        rir:          loggedSet.rir,
+        is_warmup:    loggedSet.isWarmup,
+        is_pr:        false,
+        completed_at: loggedSet.completedAt,
+      });
+    }
 
     const isPR = await checkIsPR(exercise.id, loggedSet.weightKg, reps, sessionId);
     if (isPR) {
-      await db.sets.update(loggedSet.id, { isPR: true });
+      if (user) await supabase.from('logged_sets').update({ is_pr: true }).eq('id', loggedSet.id);
       setJustLoggedPR(true);
       setTimeout(() => setJustLoggedPR(false), 2000);
     }

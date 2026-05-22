@@ -3,7 +3,8 @@ import type { WorkoutTemplate, Exercise, ExercisePref, DayStretch } from '@/type
 type Props = {
   template: WorkoutTemplate;
   exerciseMap: Map<string, Exercise>;
-  stretches: { pre: DayStretch[]; post: DayStretch[] };
+  dayStretches: { pre: DayStretch[]; post: DayStretch[] };
+  stretchExMap: Map<string, Exercise>;
   prefsMap: Map<string, ExercisePref>;
   onBegin: () => void;
 };
@@ -14,7 +15,7 @@ function weightLabel(exercise: Exercise, pref: ExercisePref | undefined): string
   return `${w}kg`;
 }
 
-export function WorkoutPreview({ template, exerciseMap, stretches, prefsMap, onBegin }: Props) {
+export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExMap, prefsMap, onBegin }: Props) {
   return (
     <div
       className="flex flex-col min-h-dvh mx-auto"
@@ -51,23 +52,30 @@ export function WorkoutPreview({ template, exerciseMap, stretches, prefsMap, onB
             Pre-Workout
           </p>
           <div className="flex flex-col gap-1">
-            {stretches.pre.map((s, i) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between px-3 py-2"
-                style={{
-                  background: 'var(--color-surface)',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                <span className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                  {i + 1}. {s.name}
-                </span>
-                <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-                  {s.reps}
-                </span>
-              </div>
-            ))}
+            {dayStretches.pre.length === 0 && (
+              <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>None added</p>
+            )}
+            {dayStretches.pre.map((s, i) => {
+              const ex = stretchExMap.get(s.exerciseId);
+              if (!ex) return null;
+              const repsDisplay = ex.isTimed
+                ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]}s`
+                : `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps`;
+              return (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between px-3 py-2"
+                  style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)' }}
+                >
+                  <span className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                    {i + 1}. {ex.name}
+                  </span>
+                  <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+                    {repsDisplay}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
 
@@ -127,23 +135,30 @@ export function WorkoutPreview({ template, exerciseMap, stretches, prefsMap, onB
             Post-Workout
           </p>
           <div className="flex flex-col gap-1">
-            {stretches.post.map((s, i) => (
-              <div
-                key={s.id}
-                className="flex items-center justify-between px-3 py-2"
-                style={{
-                  background: 'var(--color-surface)',
-                  borderRadius: 'var(--radius-sm)',
-                }}
-              >
-                <span className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                  {i + 1}. {s.name}
-                </span>
-                <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-                  {s.reps}
-                </span>
-              </div>
-            ))}
+            {dayStretches.post.length === 0 && (
+              <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>None added</p>
+            )}
+            {dayStretches.post.map((s, i) => {
+              const ex = stretchExMap.get(s.exerciseId);
+              if (!ex) return null;
+              const repsDisplay = ex.isTimed
+                ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]}s`
+                : `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps`;
+              return (
+                <div
+                  key={s.id}
+                  className="flex items-center justify-between px-3 py-2"
+                  style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-sm)' }}
+                >
+                  <span className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                    {i + 1}. {ex.name}
+                  </span>
+                  <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+                    {repsDisplay}
+                  </span>
+                </div>
+              );
+            })}
           </div>
         </section>
       </div>

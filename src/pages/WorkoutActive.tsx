@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { nanoid } from 'nanoid';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { WorkoutPreview } from '@/components/workout/WorkoutPreview';
 import { StretchStep } from '@/components/workout/StretchStep';
 import { SetLogger } from '@/components/workout/SetLogger';
@@ -9,11 +8,13 @@ import { RestTimer } from '@/components/workout/RestTimer';
 import { FeelingMeter } from '@/components/workout/FeelingMeter';
 import { WorkoutComplete, type CompletionStats } from '@/components/workout/WorkoutComplete';
 import { useTemplate } from '@/hooks/useTemplates';
-import { useExercises } from '@/hooks/useExercises';
+import { useExercises, useStretches } from '@/hooks/useExercises';
 import { useDayStretches } from '@/hooks/useDayStretches';
+import { loadAllPrefs } from '@/hooks/useExercisePref';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { enableWakeLock, disableWakeLock } from '@/lib/wakeLock';
-import { db } from '@/data/db';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
@@ -54,10 +55,14 @@ export default function WorkoutActive() {
   const allExercises = useExercises();
   const exerciseMap = new Map(allExercises.map((e) => [e.id, e]));
 
-  const stretches = useDayStretches(template?.category ?? 'push');
+  const dayStretches = useDayStretches(templateId ?? '');
+  const allStretches = useStretches();
+  const stretchExMap = new Map(allStretches.map((s) => [s.id, s]));
 
-  const allPrefs = useLiveQuery(() => db.exercisePrefs.toArray()) ?? [];
-  const prefsMap = new Map<string, ExercisePref>(allPrefs.map((p) => [p.exerciseId, p]));
+  const [prefsMap, setPrefsMap] = useState(new Map<string, ExercisePref>());
+  useEffect(() => {
+    loadAllPrefs().then(setPrefsMap);
+  }, []);
 
   const store = useWorkoutStore();
   const {
@@ -146,16 +151,23 @@ export default function WorkoutActive() {
       totalVolumeKg: 0,
     };
 
-    if (sessionId) {
-      await db.sessions.update(sessionId, { completedAt, durationSeconds });
-      const setsInSession = await db.sets.where('sessionId').equals(sessionId).toArray();
-      const workSets = setsInSession.filter((s) => !s.isWarmup);
+    const user = getLocalSession();
+    if (sessionId && user) {
+      await supabase
+        .from('workout_sessions')
+        .update({ completed_at: completedAt, duration_seconds: durationSeconds })
+        .eq('id', sessionId);
+      const { data: setsData } = await supabase
+        .from('logged_sets')
+        .select('*')
+        .eq('session_id', sessionId);
+      const workSets = (setsData ?? []).filter((s) => !s.is_warmup);
       stats = {
         durationSeconds,
         exercisesCompleted: template?.exercises.length ?? 0,
         totalSets: workSets.length,
-        prsHit: workSets.filter((s) => s.isPR).length,
-        totalVolumeKg: Math.round(workSets.reduce((sum, s) => sum + s.weightKg * s.reps, 0)),
+        prsHit: workSets.filter((s) => s.is_pr).length,
+        totalVolumeKg: Math.round(workSets.reduce((sum, s) => sum + (s.weight_kg as number) * (s.reps as number), 0)),
       };
     }
 
@@ -163,22 +175,27 @@ export default function WorkoutActive() {
     completeSession();
     resetSession();
     setStretchIndex(0);
-    setPhase('post-stretch');
+    setPhase(dayStretches.post.length > 0 ? 'post-stretch' : 'complete');
   };
 
   const handleStartWorkout = async () => {
     if (!template) return;
     const id = nanoid();
     const now = Date.now();
-    await db.sessions.add({ id, templateId: template.id, startedAt: now });
+    const user = getLocalSession();
+    if (user) {
+      await supabase.from('workout_sessions').insert({
+        id, user_id: user.id, template_id: template.id, started_at: now,
+      });
+    }
     startSession(template, id, now);
     enableWakeLock();
     setStretchIndex(0);
-    setPhase('pre-stretch');
+    setPhase(dayStretches.pre.length > 0 ? 'pre-stretch' : 'workout');
   };
 
   const handleStretchNext = () => {
-    const list = phase === 'pre-stretch' ? stretches.pre : stretches.post;
+    const list = phase === 'pre-stretch' ? dayStretches.pre : dayStretches.post;
     if (stretchIndex < list.length - 1) {
       setStretchIndex((i) => i + 1);
     } else {
@@ -432,7 +449,8 @@ export default function WorkoutActive() {
       <WorkoutPreview
         template={template}
         exerciseMap={exerciseMap}
-        stretches={stretches}
+        dayStretches={dayStretches}
+        stretchExMap={stretchExMap}
         prefsMap={prefsMap}
         onBegin={handleStartWorkout}
       />
@@ -441,14 +459,21 @@ export default function WorkoutActive() {
 
   // ── Pre-stretch phase ──────────────────────────────────────────
   if (phase === 'pre-stretch') {
-    const list = stretches.pre;
+    const list = dayStretches.pre;
+    const assignment = list[stretchIndex];
+    const stretchEx = stretchExMap.get(assignment?.exerciseId ?? '');
+    const nextAssignment = list[stretchIndex + 1];
+    const nextStretchEx = nextAssignment ? stretchExMap.get(nextAssignment.exerciseId) : undefined;
+    if (!stretchEx) { handleStretchNext(); return null; }
     return (
       <StretchStep
-        stretch={list[stretchIndex]}
+        stretch={stretchEx}
+        restSeconds={assignment.restSeconds}
         index={stretchIndex}
         total={list.length}
         phase="pre"
-        nextStretch={list[stretchIndex + 1]}
+        nextStretch={nextStretchEx}
+        nextRestSeconds={nextAssignment?.restSeconds}
         onNext={handleStretchNext}
       />
     );
@@ -456,14 +481,21 @@ export default function WorkoutActive() {
 
   // ── Post-stretch phase ─────────────────────────────────────────
   if (phase === 'post-stretch') {
-    const list = stretches.post;
+    const list = dayStretches.post;
+    const assignment = list[stretchIndex];
+    const stretchEx = stretchExMap.get(assignment?.exerciseId ?? '');
+    const nextAssignment = list[stretchIndex + 1];
+    const nextStretchEx = nextAssignment ? stretchExMap.get(nextAssignment.exerciseId) : undefined;
+    if (!stretchEx) { handleStretchNext(); return null; }
     return (
       <StretchStep
-        stretch={list[stretchIndex]}
+        stretch={stretchEx}
+        restSeconds={assignment.restSeconds}
         index={stretchIndex}
         total={list.length}
         phase="post"
-        nextStretch={list[stretchIndex + 1]}
+        nextStretch={nextStretchEx}
+        nextRestSeconds={nextAssignment?.restSeconds}
         onNext={handleStretchNext}
       />
     );

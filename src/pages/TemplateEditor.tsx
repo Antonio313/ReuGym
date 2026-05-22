@@ -4,11 +4,11 @@ import { nanoid } from 'nanoid';
 import { ArrowLeft, ArrowUp, ArrowDown, Trash, Plus } from '@phosphor-icons/react';
 import { ExercisePickerDrawer } from '@/components/workout/ExercisePickerDrawer';
 import { StretchPickerDrawer } from '@/components/workout/StretchPickerDrawer';
-import { useTemplate, saveTemplate, resetTemplate } from '@/hooks/useTemplates';
-import { useExercises } from '@/hooks/useExercises';
+import { useTemplate, saveTemplate } from '@/hooks/useTemplates';
+import { useExercises, useStretches } from '@/hooks/useExercises';
 import { useDayStretches, saveDayStretches } from '@/hooks/useDayStretches';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
-import type { TemplateExercise, WorkoutTemplate, DayStretch } from '@/types';
+import type { TemplateExercise, WorkoutTemplate, DayStretch, Exercise } from '@/types';
 
 export default function TemplateEditor() {
   const { id } = useParams<{ id: string }>();
@@ -19,10 +19,13 @@ export default function TemplateEditor() {
   const allExercises = useExercises();
   const exerciseMap = new Map(allExercises.map((e) => [e.id, e]));
 
+  const allStretches = useStretches();
+  const stretchExMap = new Map(allStretches.map((s) => [s.id, s]));
+
   const liveTemplate = useTemplate(id ?? '');
   const template = liveTemplate ?? (id ? defaultTemplateMap.get(id) : undefined);
 
-  const stretches = useDayStretches(template?.category ?? 'push');
+  const stretches = useDayStretches(id ?? '');
 
   if (!template) {
     return (
@@ -118,10 +121,6 @@ export default function TemplateEditor() {
     update([...template.exercises, newEntry]);
   };
 
-  const handleReset = async () => {
-    await resetTemplate(template.id);
-  };
-
   // ── Stretch helpers ───────────────────────────────────────────
 
   const moveStretch = (phase: 'pre' | 'post', index: number, direction: 'up' | 'down') => {
@@ -129,22 +128,22 @@ export default function TemplateEditor() {
     const target = direction === 'up' ? index - 1 : index + 1;
     if (target < 0 || target >= list.length) return;
     [list[index], list[target]] = [list[target], list[index]];
-    if (phase === 'pre') saveDayStretches(template.category, list, stretches.post);
-    else saveDayStretches(template.category, stretches.pre, list);
+    if (phase === 'pre') void saveDayStretches(id ?? '', list, stretches.post);
+    else void saveDayStretches(id ?? '', stretches.pre, list);
   };
 
   const removeStretch = (phase: 'pre' | 'post', index: number) => {
     const list = (phase === 'pre' ? stretches.pre : stretches.post).filter((_, i) => i !== index);
-    if (phase === 'pre') saveDayStretches(template.category, list, stretches.post);
-    else saveDayStretches(template.category, stretches.pre, list);
+    if (phase === 'pre') void saveDayStretches(id ?? '', list, stretches.post);
+    else void saveDayStretches(id ?? '', stretches.pre, list);
   };
 
-  const addStretchFromLibrary = (phase: 'pre' | 'post', libraryStretch: DayStretch) => {
-    const copy: DayStretch = { ...libraryStretch, id: nanoid() };
+  const addStretchFromLibrary = (phase: 'pre' | 'post', exercise: Exercise) => {
+    const assignment: DayStretch = { id: nanoid(), exerciseId: exercise.id, restSeconds: exercise.restSeconds };
     if (phase === 'pre') {
-      saveDayStretches(template.category, [...stretches.pre, copy], stretches.post);
+      void saveDayStretches(id ?? '', [...stretches.pre, assignment], stretches.post);
     } else {
-      saveDayStretches(template.category, stretches.pre, [...stretches.post, copy]);
+      void saveDayStretches(id ?? '', stretches.pre, [...stretches.post, assignment]);
     }
   };
 
@@ -182,6 +181,7 @@ export default function TemplateEditor() {
         <StretchSection
           label="Pre-Workout Stretches"
           stretches={stretches.pre}
+          stretchExMap={stretchExMap}
           onMoveUp={(i) => moveStretch('pre', i, 'up')}
           onMoveDown={(i) => moveStretch('pre', i, 'down')}
           onRemove={(i) => removeStretch('pre', i)}
@@ -358,6 +358,7 @@ export default function TemplateEditor() {
           <StretchSection
             label="Post-Workout Stretches"
             stretches={stretches.post}
+            stretchExMap={stretchExMap}
             onMoveUp={(i) => moveStretch('post', i, 'up')}
             onMoveDown={(i) => moveStretch('post', i, 'down')}
             onRemove={(i) => removeStretch('post', i)}
@@ -365,16 +366,7 @@ export default function TemplateEditor() {
           />
         </div>
 
-        {/* Reset to defaults */}
-        <div className="pb-8 mt-6" style={{ borderTop: 'var(--border-thin)' }}>
-          <button
-            onClick={handleReset}
-            className="w-full py-3 font-body mt-4"
-            style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}
-          >
-            Reset to defaults
-          </button>
-        </div>
+        <div className="pb-8" />
       </div>
 
       <ExercisePickerDrawer
@@ -388,9 +380,10 @@ export default function TemplateEditor() {
       <StretchPickerDrawer
         open={stretchPickerPhase !== null}
         onClose={() => setStretchPickerPhase(null)}
-        onSelect={(stretch) => {
-          if (stretchPickerPhase) addStretchFromLibrary(stretchPickerPhase, stretch);
+        onSelect={(exercise) => {
+          if (stretchPickerPhase) addStretchFromLibrary(stretchPickerPhase, exercise);
         }}
+        excludeIds={[...stretches.pre.map((s) => s.exerciseId), ...stretches.post.map((s) => s.exerciseId)]}
       />
     </div>
   );
@@ -401,13 +394,14 @@ export default function TemplateEditor() {
 type StretchSectionProps = {
   label: string;
   stretches: DayStretch[];
+  stretchExMap: Map<string, Exercise>;
   onMoveUp: (i: number) => void;
   onMoveDown: (i: number) => void;
   onRemove: (i: number) => void;
   onAdd: () => void;
 };
 
-function StretchSection({ label, stretches, onMoveUp, onMoveDown, onRemove, onAdd }: StretchSectionProps) {
+function StretchSection({ label, stretches, stretchExMap, onMoveUp, onMoveDown, onRemove, onAdd }: StretchSectionProps) {
   return (
     <>
       <p
@@ -416,33 +410,41 @@ function StretchSection({ label, stretches, onMoveUp, onMoveDown, onRemove, onAd
       >
         {label}
       </p>
-      {stretches.map((s, i) => (
-        <div
-          key={s.id}
-          className="flex items-center gap-2 py-2"
-          style={{ borderBottom: 'var(--border-thin)' }}
-        >
-          <div className="flex flex-col gap-0.5">
-            <button onClick={() => onMoveUp(i)} disabled={i === 0} style={{ color: i === 0 ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}>
-              <ArrowUp size={14} />
-            </button>
-            <button onClick={() => onMoveDown(i)} disabled={i === stretches.length - 1} style={{ color: i === stretches.length - 1 ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}>
-              <ArrowDown size={14} />
+      {stretches.map((s, i) => {
+        const ex = stretchExMap.get(s.exerciseId);
+        const repsDisplay = ex
+          ? (ex.isTimed
+              ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]}s`
+              : `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps`)
+          : s.exerciseId;
+        return (
+          <div
+            key={s.id}
+            className="flex items-center gap-2 py-2"
+            style={{ borderBottom: 'var(--border-thin)' }}
+          >
+            <div className="flex flex-col gap-0.5">
+              <button onClick={() => onMoveUp(i)} disabled={i === 0} style={{ color: i === 0 ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}>
+                <ArrowUp size={14} />
+              </button>
+              <button onClick={() => onMoveDown(i)} disabled={i === stretches.length - 1} style={{ color: i === stretches.length - 1 ? 'var(--color-text-faint)' : 'var(--color-text-muted)' }}>
+                <ArrowDown size={14} />
+              </button>
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                {ex?.name ?? s.exerciseId}
+              </p>
+              <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
+                {repsDisplay}
+              </p>
+            </div>
+            <button onClick={() => onRemove(i)} style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}>
+              <Trash size={16} />
             </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-              {s.name}
-            </p>
-            <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
-              {s.reps}
-            </p>
-          </div>
-          <button onClick={() => onRemove(i)} style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}>
-            <Trash size={16} />
-          </button>
-        </div>
-      ))}
+        );
+      })}
       <button
         onClick={onAdd}
         className="flex items-center gap-2 py-3"

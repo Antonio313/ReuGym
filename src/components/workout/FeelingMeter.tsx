@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
-import { db } from '@/data/db';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
+import { saveExercisePref } from '@/hooks/useExercisePref';
 import type { Exercise, ExercisePref } from '@/types';
 
 type FeelingLevel = 'easy' | 'medium-easy' | 'fair' | 'fairly-difficult' | 'difficult';
@@ -45,15 +47,19 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
   const [avgRIR, setAvgRIR] = useState<number | null>(null);
 
   useEffect(() => {
-    db.sets
-      .where('sessionId').equals(sessionId)
-      .filter((s) => s.exerciseId === exercise.id && !s.isWarmup)
-      .toArray()
-      .then((workSets) => {
-        if (workSets.length < 2) return;
-        setAvgRIR(workSets.reduce((sum, s) => sum + s.rir, 0) / workSets.length);
-      })
-      .catch(() => {});
+    const user = getLocalSession();
+    if (!user) return;
+    supabase
+      .from('logged_sets')
+      .select('rir')
+      .eq('user_id', user.id)
+      .eq('session_id', sessionId)
+      .eq('exercise_id', exercise.id)
+      .eq('is_warmup', false)
+      .then(({ data }) => {
+        if (!data || data.length < 2) return;
+        setAvgRIR(data.reduce((sum, s) => sum + (s.rir as number), 0) / data.length);
+      });
   }, [sessionId, exercise.id]);
 
   const weightInc  = getWeightIncrement(exercise);
@@ -89,7 +95,7 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
       startingWeightKg: mode === 'reps' ? currentStartingWeightKg : suggestedWeight,
       ...(mode !== 'weight' ? { startingReps: suggestedReps } : {}),
     };
-    await db.exercisePrefs.put(pref);
+    await saveExercisePref(pref);
     setSaving(false);
     onDone();
   };

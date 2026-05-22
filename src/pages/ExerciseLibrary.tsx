@@ -2,13 +2,13 @@ import { useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
-import { useExercises } from '@/hooks/useExercises';
-import { useStretchLibrary } from '@/hooks/useStretchLibrary';
+import { useExercises, useStretches } from '@/hooks/useExercises';
 import type { ExerciseCategory } from '@/types';
 
 const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back'];
+const STRETCH_CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back', 'general'];
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
-  push: 'PUSH', pull: 'PULL', legs: 'LEGS', core: 'CORE', glutes: 'GLUTES', back: 'BACK',
+  push: 'PUSH', pull: 'PULL', legs: 'LEGS', core: 'CORE', glutes: 'GLUTES', back: 'BACK', general: 'GENERAL',
 };
 
 type Tab = 'exercises' | 'stretches';
@@ -22,7 +22,7 @@ export default function ExerciseLibrary() {
   const [query, setQuery] = useState('');
 
   const allExercises = useExercises();
-  const allStretches = useStretchLibrary();
+  const allStretches = useStretches();
 
   const filteredExercises = query.trim()
     ? allExercises.filter((e) =>
@@ -48,7 +48,7 @@ export default function ExerciseLibrary() {
           {tab === 'exercises' ? 'EXERCISES' : 'STRETCHES'}
         </span>
         <button
-          onClick={() => tab === 'exercises' ? navigate('/exercise/new?returnTo=/exercises') : navigate('/stretch/new')}
+          onClick={() => tab === 'exercises' ? navigate('/exercise/new?returnTo=/exercises') : navigate('/exercise/new?isStretch=true&returnTo=/exercises?tab=stretches')}
           className="flex items-center gap-1.5 font-body px-3 py-1.5"
           style={{
             fontSize: 'var(--text-meta)',
@@ -193,36 +193,85 @@ export default function ExerciseLibrary() {
                 {isSearching ? `No stretches match "${query}"` : 'No stretches in library'}
               </p>
               <button
-                onClick={() => navigate('/stretch/new')}
+                onClick={() => navigate('/exercise/new?isStretch=true')}
                 className="mt-4 font-body"
                 style={{ fontSize: 'var(--text-meta)', color: 'var(--color-accent)' }}
               >
                 + Create a stretch
               </button>
             </div>
+          ) : isSearching ? (
+            filteredStretches.map((s) => {
+              const repsDisplay = s.isTimed
+                ? `${s.defaultRepRange[0]}–${s.defaultRepRange[1]}s`
+                : `${s.defaultRepRange[0]}–${s.defaultRepRange[1]} reps`;
+              return (
+                <button
+                  key={s.id}
+                  onClick={() => navigate(`/exercise/${s.id}/edit`)}
+                  className="flex w-full items-center justify-between px-4 py-3 text-left"
+                  style={{ borderBottom: 'var(--border-thin)' }}
+                >
+                  <span>
+                    <span className="font-body block" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                      {s.name}
+                    </span>
+                    <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
+                      {repsDisplay}{s.restSeconds > 0 ? ` · ${s.restSeconds}s rest` : ''}{s.notes ? ` · ${s.notes}` : ''}
+                    </span>
+                  </span>
+                  <span style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)', marginLeft: '0.5rem' }}>Edit</span>
+                </button>
+              );
+            })
           ) : (
-            filteredStretches.map((stretch) => (
-              <button
-                key={stretch.id}
-                onClick={() => navigate(`/stretch/${stretch.id}/edit`)}
-                className="flex w-full items-center justify-between px-4 py-3 text-left"
-                style={{ borderBottom: 'var(--border-thin)' }}
-              >
-                <span>
-                  <span className="font-body block" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                    {stretch.name}
-                  </span>
-                  <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
-                    {stretch.reps}
-                    {stretch.restSeconds > 0 && ` · ${stretch.restSeconds}s rest`}
-                    {stretch.note && ` · ${stretch.note}`}
-                  </span>
-                </span>
-                <span style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)', marginLeft: '0.5rem' }}>
-                  Edit
-                </span>
-              </button>
-            ))
+            STRETCH_CATEGORY_ORDER.map((cat) => {
+              const catStretches = allStretches.filter((s) => s.category === cat);
+              if (catStretches.length === 0) return null;
+              return (
+                <div key={cat}>
+                  <p
+                    className="font-body font-medium uppercase tracking-widest px-4 py-2 sticky"
+                    style={{
+                      fontSize: 'var(--text-micro)',
+                      color: 'var(--color-accent)',
+                      background: 'var(--color-bg)',
+                      top: 'var(--header-height)',
+                      zIndex: 10,
+                      borderBottom: 'var(--border-thin)',
+                    }}
+                  >
+                    {CATEGORY_LABELS[cat]}
+                    <span style={{ color: 'var(--color-text-faint)', marginLeft: '0.5rem' }}>
+                      {catStretches.length}
+                    </span>
+                  </p>
+                  {catStretches.map((s) => {
+                    const repsDisplay = s.isTimed
+                      ? `${s.defaultRepRange[0]}–${s.defaultRepRange[1]}s`
+                      : `${s.defaultRepRange[0]}–${s.defaultRepRange[1]} reps`;
+                    return (
+                      <button
+                        key={s.id}
+                        onClick={() => navigate(`/exercise/${s.id}/edit`)}
+                        className="flex w-full items-center justify-between px-4 py-3 text-left"
+                        style={{ borderBottom: 'var(--border-thin)' }}
+                      >
+                        <span>
+                          <span className="font-body block" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                            {s.name}
+                          </span>
+                          <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
+                            {repsDisplay}{s.notes ? ` · ${s.notes}` : ''}
+                          </span>
+                        </span>
+                        <span style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)', marginLeft: '0.5rem' }}>Edit</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              );
+            })
           )
         )}
       </main>

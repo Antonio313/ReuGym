@@ -1,4 +1,5 @@
-import { db } from '@/data/db';
+import { supabase } from './supabase';
+import { getLocalSession } from './auth';
 
 export async function checkIsPR(
   exerciseId: string,
@@ -8,14 +9,19 @@ export async function checkIsPR(
 ): Promise<boolean> {
   if (weightKg === 0) return false;
 
-  const prevSets = await db.sets
-    .where('exerciseId')
-    .equals(exerciseId)
-    .filter((s) => s.sessionId !== currentSessionId && !s.isWarmup)
-    .toArray();
+  const user = getLocalSession();
+  if (!user) return false;
 
-  if (prevSets.length === 0) return false;
+  const { data } = await supabase
+    .from('logged_sets')
+    .select('weight_kg, reps')
+    .eq('user_id', user.id)
+    .eq('exercise_id', exerciseId)
+    .eq('is_warmup', false)
+    .neq('session_id', currentSessionId);
 
-  const maxVolume = Math.max(...prevSets.map((s) => s.weightKg * s.reps));
+  if (!data || data.length === 0) return false;
+
+  const maxVolume = Math.max(...data.map((s) => (s.weight_kg as number) * (s.reps as number)));
   return weightKg * reps > maxVolume;
 }

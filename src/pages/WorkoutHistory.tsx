@@ -1,13 +1,14 @@
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { ClockCounterClockwise, Trophy } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { db } from '@/data/db';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
 import { useExercises } from '@/hooks/useExercises';
 import { useTemplates } from '@/hooks/useTemplates';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
-import type { WorkoutSession, LoggedSet } from '@/types';
+import type { WorkoutSession } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────
 
@@ -145,42 +146,66 @@ export default function WorkoutHistory() {
     return defaultTemplateMap.get(templateId)?.shortLabel ?? templateId.toUpperCase();
   };
 
-  const enrichedSessions = useLiveQuery(async (): Promise<EnrichedSession[]> => {
-    const sessions = await db.sessions
-      .orderBy('startedAt')
-      .reverse()
-      .filter((s) => s.completedAt != null)
-      .toArray();
+  const [enrichedSessions, setEnrichedSessions] = useState<EnrichedSession[] | undefined>(undefined);
 
-    if (sessions.length === 0) return [];
+  useEffect(() => {
+    const user = getLocalSession();
+    if (!user) { setEnrichedSessions([]); return; }
 
-    const allSets: LoggedSet[] = await db.sets.toArray();
+    const load = async () => {
+      const { data: sessionRows } = await supabase
+        .from('workout_sessions')
+        .select('*')
+        .eq('user_id', user.id)
+        .not('completed_at', 'is', null)
+        .order('started_at', { ascending: false });
 
-    const setsBySession = new Map<string, LoggedSet[]>();
-    for (const s of allSets) {
-      const arr = setsBySession.get(s.sessionId) ?? [];
-      arr.push(s);
-      setsBySession.set(s.sessionId, arr);
-    }
+      if (!sessionRows || sessionRows.length === 0) { setEnrichedSessions([]); return; }
 
-    return sessions.map((session) => {
-      const sets = setsBySession.get(session.id) ?? [];
-      const workSets = sets.filter((s) => !s.isWarmup);
-      const prCount = workSets.filter((s) => s.isPR).length;
+      const sessionIds = sessionRows.map((r) => r.id as string);
+      const { data: setRows } = await supabase
+        .from('logged_sets')
+        .select('session_id, exercise_id, is_warmup, is_pr, completed_at')
+        .in('session_id', sessionIds);
 
-      // Unique exercise IDs in chronological order
-      const seenIds = new Set<string>();
-      const exerciseIds: string[] = [];
-      const sorted = [...sets].sort((a, b) => a.completedAt - b.completedAt);
-      for (const s of sorted) {
-        if (!seenIds.has(s.exerciseId)) {
-          seenIds.add(s.exerciseId);
-          exerciseIds.push(s.exerciseId);
-        }
+      const setsBySession = new Map<string, typeof setRows>();
+      for (const s of setRows ?? []) {
+        const arr = setsBySession.get(s.session_id as string) ?? [];
+        arr.push(s);
+        setsBySession.set(s.session_id as string, arr);
       }
 
-      return { session, workSetCount: workSets.length, prCount, exerciseIds };
-    });
+      const enriched: EnrichedSession[] = sessionRows.map((row) => {
+        const session: WorkoutSession = {
+          id:              row.id as string,
+          templateId:      row.template_id as string,
+          startedAt:       row.started_at as number,
+          completedAt:     row.completed_at as number | undefined,
+          durationSeconds: row.duration_seconds as number | undefined,
+          notes:           row.notes as string | undefined,
+        };
+        const sets = setsBySession.get(session.id) ?? [];
+        const workSets = sets.filter((s) => !s.is_warmup);
+        const prCount = workSets.filter((s) => s.is_pr).length;
+
+        const seenIds = new Set<string>();
+        const exerciseIds: string[] = [];
+        const sorted = [...sets].sort((a, b) => (a.completed_at as number) - (b.completed_at as number));
+        for (const s of sorted) {
+          const id = s.exercise_id as string;
+          if (!seenIds.has(id)) {
+            seenIds.add(id);
+            exerciseIds.push(id);
+          }
+        }
+
+        return { session, workSetCount: workSets.length, prCount, exerciseIds };
+      });
+
+      setEnrichedSessions(enriched);
+    };
+
+    void load();
   }, []);
 
   const loading = enrichedSessions === undefined;
@@ -207,7 +232,6 @@ export default function WorkoutHistory() {
 
       <main>
         {loading && (
-          // Skeleton cards while Dexie loads
           <div>
             {[1, 2, 3].map((i) => (
               <div
@@ -217,29 +241,14 @@ export default function WorkoutHistory() {
               >
                 <div
                   className="mb-2"
-                  style={{
-                    height: '1.25rem',
-                    width: '6rem',
-                    background: 'var(--color-surface-2)',
-                    borderRadius: 'var(--radius-sm)',
-                  }}
+                  style={{ height: '1.25rem', width: '6rem', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)' }}
                 />
                 <div
                   className="mb-3"
-                  style={{
-                    height: '0.875rem',
-                    width: '80%',
-                    background: 'var(--color-surface-2)',
-                    borderRadius: 'var(--radius-sm)',
-                  }}
+                  style={{ height: '0.875rem', width: '80%', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)' }}
                 />
                 <div
-                  style={{
-                    height: '0.75rem',
-                    width: '40%',
-                    background: 'var(--color-surface-2)',
-                    borderRadius: 'var(--radius-sm)',
-                  }}
+                  style={{ height: '0.75rem', width: '40%', background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)' }}
                 />
               </div>
             ))}

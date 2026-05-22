@@ -1,6 +1,6 @@
 // ─── Exercise Library (static, lives in code) ───────────────────
 
-export type ExerciseCategory = 'push' | 'pull' | 'legs' | 'core' | 'glutes' | 'back';
+export type ExerciseCategory = 'push' | 'pull' | 'legs' | 'core' | 'glutes' | 'back' | 'general';
 export type ExerciseType = 'compound' | 'accessory' | 'plyo' | 'isometric';
 export type MuscleGroup =
   | 'chest' | 'shoulders' | 'triceps'
@@ -19,12 +19,13 @@ export type Exercise = {
   restSeconds: number;
   isBodyweight: boolean;
   isCable?: boolean;
-  isTimed?: boolean;   // reps field stores seconds; shows count-up timer in SetLogger
+  isTimed?: boolean;
+  isStretch?: boolean;
   videoUrl?: string;
   notes?: string;
 };
 
-// ─── Workout Templates (static, lives in code) ──────────────────
+// ─── Workout Templates ───────────────────────────────────────────
 
 export type TemplateExercise = {
   exerciseId: string;
@@ -42,7 +43,15 @@ export type WorkoutTemplate = {
   exercises: TemplateExercise[];
 };
 
-// ─── Database Types (stored in IndexedDB via Dexie) ─────────────
+// ─── Stretch assignment (references an Exercise with isStretch:true) ─
+
+export type DayStretch = {
+  id: string;          // assignment nanoid
+  exerciseId: string;
+  restSeconds: number;
+};
+
+// ─── Database Types ──────────────────────────────────────────────
 
 export type WorkoutSession = {
   id: string;
@@ -75,32 +84,7 @@ export type BodyStat = {
   notes?: string;
 };
 
-// ─── Warm-up & Stretch Types ─────────────────────────────────────
-
-export type WarmupItem = {
-  id: string;
-  name: string;
-  reps: string;   // display string: "10/leg", "60 seconds", "8 reps"
-  note?: string;
-};
-
-export type StretchItem = {
-  id: string;
-  name: string;
-  duration: string;
-  note?: string;
-};
-
-export type DayStretch = {
-  id: string;
-  name: string;
-  reps: string;        // display string: "30s/side", "15 reps", "8/side"
-  restSeconds: number; // rest after this stretch before the next
-  note?: string;
-  videoUrl?: string;
-};
-
-// ─── Exercise Preferences (stored in IndexedDB) ──────────────────
+// ─── Exercise Preferences ────────────────────────────────────────
 
 export type ExercisePref = {
   exerciseId: string;

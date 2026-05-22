@@ -1,10 +1,10 @@
-import { useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
+import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { Plus, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { db } from '@/data/db';
+import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/auth';
 import type { BodyStat } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -116,7 +116,18 @@ function LogForm({
       chestCm: chestStr ? parseFloat(chestStr) : undefined,
       notes: notes.trim() || undefined,
     };
-    await db.bodyStats.add(entry);
+    const user = getLocalSession();
+    if (user) {
+      await supabase.from('body_stats').insert({
+        id:        entry.id,
+        user_id:   user.id,
+        date:      entry.date,
+        weight_kg: entry.weightKg ?? null,
+        waist_cm:  entry.waistCm ?? null,
+        chest_cm:  entry.chestCm ?? null,
+        notes:     entry.notes ?? null,
+      });
+    }
     setSaving(false);
     onSaved();
   };
@@ -248,10 +259,28 @@ function LogForm({
 export default function BodyStats() {
   const [formOpen, setFormOpen] = useState(false);
 
-  const stats = useLiveQuery(
-    () => db.bodyStats.orderBy('date').reverse().toArray(),
-    [],
-  );
+  const [stats, setStats] = useState<BodyStat[] | undefined>(undefined);
+  const [refreshToken, setRefreshToken] = useState(0);
+
+  useEffect(() => {
+    const user = getLocalSession();
+    if (!user) { setStats([]); return; }
+    supabase
+      .from('body_stats')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('date', { ascending: false })
+      .then(({ data }) => {
+        setStats((data ?? []).map((r) => ({
+          id:        r.id as string,
+          date:      r.date as number,
+          weightKg:  r.weight_kg as number | undefined,
+          waistCm:   r.waist_cm as number | undefined,
+          chestCm:   r.chest_cm as number | undefined,
+          notes:     r.notes as string | undefined,
+        })));
+      });
+  }, [refreshToken]);
 
   const loading = stats === undefined;
   const latest = stats?.[0] ?? null;
@@ -298,7 +327,7 @@ export default function BodyStats() {
       {formOpen && (
         <LogForm
           latest={latest}
-          onSaved={() => setFormOpen(false)}
+          onSaved={() => { setFormOpen(false); setRefreshToken((n) => n + 1); }}
           onCancel={() => setFormOpen(false)}
         />
       )}

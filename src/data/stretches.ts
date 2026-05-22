@@ -1,109 +1,329 @@
-import type { DayStretch, ExerciseCategory } from '../types';
+import type { Exercise } from '../types';
 
-type DayStretchData = { pre: DayStretch[]; post: DayStretch[] };
-
-export const dayStretches: Record<ExerciseCategory, DayStretchData> = {
-  push: {
-    pre: [
-      { id: 'push-pre-1', name: 'Band Pull-Aparts',            reps: '15 reps',               restSeconds: 10 },
-      { id: 'push-pre-2', name: 'Arm Circles',                  reps: '10 reps each direction', restSeconds: 10 },
-      { id: 'push-pre-3', name: 'Shoulder Dislocates',          reps: '10 reps',               restSeconds: 15, note: 'Band or broomstick' },
-      { id: 'push-pre-4', name: 'Scapular Push-Ups',            reps: '10 reps',               restSeconds: 15, note: 'Arms straight, just depress and elevate scapula' },
-      { id: 'push-pre-5', name: 'Wrist Circles',                reps: '10 reps each direction', restSeconds: 10 },
-    ],
-    post: [
-      { id: 'push-post-1', name: 'Doorway Chest Stretch',       reps: '45s/side',  restSeconds: 20, note: 'Elbow at 90°, rotate away from wall' },
-      { id: 'push-post-2', name: 'Overhead Triceps Stretch',    reps: '30s/side',  restSeconds: 15 },
-      { id: 'push-post-3', name: 'Cross-Body Shoulder Stretch', reps: '30s/side',  restSeconds: 15 },
-      { id: 'push-post-4', name: 'Sleeper Stretch',             reps: '30s/side',  restSeconds: 20, note: 'Lie on side — internal rotation recovery' },
-      { id: 'push-post-5', name: 'Prayer Stretch (Wrists)',     reps: '30 seconds', restSeconds: 15, note: 'Palms together, press down' },
-    ],
+export const stretches: Exercise[] = [
+  // ─── Push pre-workout ─────────────────────────────────────────
+  {
+    id: 'push-pre-1', name: 'Band Pull-Aparts',
+    category: 'general', type: 'accessory', muscles: ['shoulders', 'back'],
+    defaultRepRange: [15, 15], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true,
+  },
+  {
+    id: 'push-pre-2', name: 'Arm Circles',
+    category: 'push', type: 'accessory', muscles: ['shoulders'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Each direction',
+  },
+  {
+    id: 'push-pre-3', name: 'Shoulder Dislocates',
+    category: 'push', type: 'accessory', muscles: ['shoulders'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Band or broomstick',
+  },
+  {
+    id: 'push-pre-4', name: 'Scapular Push-Ups',
+    category: 'push', type: 'accessory', muscles: ['back', 'shoulders'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Arms straight, just depress and elevate scapula',
+  },
+  {
+    id: 'push-pre-5', name: 'Wrist Circles',
+    category: 'push', type: 'accessory', muscles: ['forearms'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Each direction',
   },
 
-  pull: {
-    pre: [
-      { id: 'pull-pre-1', name: 'Band Pull-Aparts',             reps: '15 reps',       restSeconds: 10 },
-      { id: 'pull-pre-2', name: 'Scapular Wall Slides',         reps: '10 reps',       restSeconds: 15, note: 'Back flat against wall throughout' },
-      { id: 'pull-pre-3', name: 'Cat-Cow with Reach-Through',   reps: '5/side',        restSeconds: 10 },
-      { id: 'pull-pre-4', name: 'Thoracic Rotations',           reps: '8/side',        restSeconds: 10, note: 'Rotate through upper back, not lower' },
-      { id: 'pull-pre-5', name: 'Dead Hang',                    reps: '20–30 seconds', restSeconds: 20, note: 'Mandatory before rows — decompresses spine' },
-    ],
-    post: [
-      { id: 'pull-post-1', name: 'Lat Overhead Lean Stretch',   reps: '45s/side',  restSeconds: 20, note: 'Arm overhead, lean away to feel the lat' },
-      { id: 'pull-post-2', name: "Child's Pose",                reps: '60 seconds', restSeconds: 20, note: 'Arms extended, let lats stretch fully' },
-      { id: 'pull-post-3', name: 'Thread-the-Needle',           reps: '45s/side',  restSeconds: 20, note: 'Upper back rotation' },
-      { id: 'pull-post-4', name: 'Biceps Wall Stretch',         reps: '30s/side',  restSeconds: 15, note: 'Palm on wall, rotate away' },
-      { id: 'pull-post-5', name: 'Doorway Posterior Shoulder',  reps: '30s/side',  restSeconds: 15 },
-    ],
+  // ─── Push post-workout ────────────────────────────────────────
+  {
+    id: 'push-post-1', name: 'Doorway Chest Stretch',
+    category: 'push', type: 'isometric', muscles: ['chest', 'shoulders'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Elbow at 90°, rotate away from wall — per side',
+  },
+  {
+    id: 'push-post-2', name: 'Overhead Triceps Stretch',
+    category: 'push', type: 'isometric', muscles: ['triceps'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+  {
+    id: 'push-post-3', name: 'Cross-Body Shoulder Stretch',
+    category: 'push', type: 'isometric', muscles: ['shoulders'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+  {
+    id: 'push-post-4', name: 'Sleeper Stretch',
+    category: 'push', type: 'isometric', muscles: ['shoulders'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Lie on side — internal rotation recovery — per side',
+  },
+  {
+    id: 'push-post-5', name: 'Prayer Stretch (Wrists)',
+    category: 'push', type: 'isometric', muscles: ['forearms'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Palms together, press down',
   },
 
-  legs: {
-    pre: [
-      { id: 'legs-pre-1', name: 'Leg Swings Front-to-Back',    reps: '10/leg',   restSeconds: 10 },
-      { id: 'legs-pre-2', name: 'Leg Swings Side-to-Side',     reps: '10/leg',   restSeconds: 10 },
-      { id: 'legs-pre-3', name: 'Walking Lunges',              reps: '10/leg',   restSeconds: 15 },
-      { id: 'legs-pre-4', name: 'Hip Circles',                 reps: '8/side',   restSeconds: 10 },
-      { id: 'legs-pre-5', name: 'Ankle Circles',               reps: '10/ankle', restSeconds: 10 },
-      { id: 'legs-pre-6', name: 'Pogo Hops',                   reps: '20 reps',  restSeconds: 15, note: 'Small springy hops — primes tendons before box jumps' },
-    ],
-    post: [
-      { id: 'legs-post-1', name: 'Standing Quad Stretch',      reps: '45s/side',  restSeconds: 20 },
-      { id: 'legs-post-2', name: 'Standing Hamstring Fold',    reps: '60 seconds', restSeconds: 20, note: 'Soft knees, let spine hang' },
-      { id: 'legs-post-3', name: 'Figure-4 Glute Stretch',     reps: '45s/side',  restSeconds: 20 },
-      { id: 'legs-post-4', name: 'Hip Flexor Kneeling Lunge',  reps: '45s/side',  restSeconds: 20, note: 'Back knee on ground — targets rectus femoris' },
-      { id: 'legs-post-5', name: 'Calf Stretch (Wall)',        reps: '30s/side',  restSeconds: 15 },
-      { id: 'legs-post-6', name: 'Pigeon Pose',                reps: '60s/side',  restSeconds: 25, note: 'Breathe into the hip' },
-    ],
+  // ─── Pull pre-workout ─────────────────────────────────────────
+  {
+    id: 'pull-pre-2', name: 'Scapular Wall Slides',
+    category: 'pull', type: 'accessory', muscles: ['back', 'shoulders'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Back flat against wall throughout',
+  },
+  {
+    id: 'pull-pre-3', name: 'Cat-Cow with Reach-Through',
+    category: 'general', type: 'accessory', muscles: ['back'],
+    defaultRepRange: [5, 5], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per side',
+  },
+  {
+    id: 'pull-pre-4', name: 'Thoracic Rotations',
+    category: 'general', type: 'accessory', muscles: ['back'],
+    defaultRepRange: [8, 8], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Rotate through upper back, not lower — per side',
+  },
+  {
+    id: 'pull-pre-5', name: 'Dead Hang',
+    category: 'general', type: 'isometric', muscles: ['back', 'forearms'],
+    defaultRepRange: [20, 30], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Mandatory before rows — decompresses spine',
   },
 
-  core: {
-    pre: [
-      { id: 'core-pre-1', name: 'Cat-Cow',                     reps: '8 reps',  restSeconds: 10 },
-      { id: 'core-pre-2', name: 'Dead Bugs',                   reps: '8 reps',  restSeconds: 15, note: 'Exhale on lower — slow and controlled' },
-      { id: 'core-pre-3', name: 'Bird Dogs',                   reps: '6/side',  restSeconds: 10 },
-      { id: 'core-pre-4', name: 'Hip Circles',                 reps: '8/side',  restSeconds: 10 },
-      { id: 'core-pre-5', name: 'Inchworms',                   reps: '5 reps',  restSeconds: 15 },
-    ],
-    post: [
-      { id: 'core-post-1', name: "Child's Pose",               reps: '60 seconds', restSeconds: 20 },
-      { id: 'core-post-2', name: 'Cobra / Upward Dog',         reps: '45 seconds', restSeconds: 20, note: 'Counteract all the core flexion' },
-      { id: 'core-post-3', name: 'Supine Spinal Twist',        reps: '45s/side',   restSeconds: 20 },
-      { id: 'core-post-4', name: 'Hip Flexor Kneeling Stretch',reps: '45s/side',   restSeconds: 20 },
-      { id: 'core-post-5', name: 'Seated Forward Fold',        reps: '60 seconds', restSeconds: 20, note: 'Decompress spine, stretch hamstrings and lower back' },
-    ],
+  // ─── Pull post-workout ────────────────────────────────────────
+  {
+    id: 'pull-post-1', name: 'Lat Overhead Lean Stretch',
+    category: 'pull', type: 'isometric', muscles: ['back'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Arm overhead, lean away to feel the lat — per side',
+  },
+  {
+    id: 'pull-post-2', name: "Child's Pose",
+    category: 'general', type: 'isometric', muscles: ['back'],
+    defaultRepRange: [60, 60], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Arms extended, let lats stretch fully',
+  },
+  {
+    id: 'pull-post-3', name: 'Thread-the-Needle',
+    category: 'general', type: 'isometric', muscles: ['back'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Upper back rotation — per side',
+  },
+  {
+    id: 'pull-post-4', name: 'Biceps Wall Stretch',
+    category: 'pull', type: 'isometric', muscles: ['biceps'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Palm on wall, rotate away — per side',
+  },
+  {
+    id: 'pull-post-5', name: 'Doorway Posterior Shoulder',
+    category: 'pull', type: 'isometric', muscles: ['shoulders'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
   },
 
-  glutes: {
-    pre: [
-      { id: 'glutes-pre-1', name: 'Glute Bridges (Activation)', reps: '15 reps', restSeconds: 10, note: 'Squeeze for 2s at top' },
-      { id: 'glutes-pre-2', name: 'Clamshells',                 reps: '12/side', restSeconds: 10 },
-      { id: 'glutes-pre-3', name: 'Fire Hydrants',              reps: '10/side', restSeconds: 10 },
-      { id: 'glutes-pre-4', name: 'Dynamic Hip Flexor Lunges',  reps: '5/side',  restSeconds: 15 },
-      { id: 'glutes-pre-5', name: '90/90 Hip Switches',         reps: '8 reps',  restSeconds: 15, note: 'Slowly rotate between both hip positions' },
-    ],
-    post: [
-      { id: 'glutes-post-1', name: 'Pigeon Pose',               reps: '60s/side',   restSeconds: 25, note: 'Breathe into the hip — deepest glute stretch' },
-      { id: 'glutes-post-2', name: 'Figure-4 Glute Stretch',    reps: '45s/side',   restSeconds: 20 },
-      { id: 'glutes-post-3', name: 'Supine Hip Flexor Stretch', reps: '45s/side',   restSeconds: 20 },
-      { id: 'glutes-post-4', name: 'Butterfly Stretch',         reps: '60 seconds', restSeconds: 20, note: 'Feet together, lean forward for inner thigh and glute' },
-      { id: 'glutes-post-5', name: 'Seated Cross-Leg Glute Stretch', reps: '45s/side', restSeconds: 20 },
-    ],
+  // ─── Legs pre-workout ─────────────────────────────────────────
+  {
+    id: 'legs-pre-1', name: 'Leg Swings Front-to-Back',
+    category: 'legs', type: 'accessory', muscles: ['hamstrings', 'glutes'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per leg',
+  },
+  {
+    id: 'legs-pre-2', name: 'Leg Swings Side-to-Side',
+    category: 'legs', type: 'accessory', muscles: ['glutes', 'quads'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per leg',
+  },
+  {
+    id: 'legs-pre-3', name: 'Walking Lunges',
+    category: 'legs', type: 'accessory', muscles: ['quads', 'glutes'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Per leg',
+  },
+  {
+    id: 'legs-pre-4', name: 'Hip Circles',
+    category: 'general', type: 'accessory', muscles: ['glutes'],
+    defaultRepRange: [8, 8], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per side',
+  },
+  {
+    id: 'legs-pre-5', name: 'Ankle Circles',
+    category: 'legs', type: 'accessory', muscles: ['calves'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per ankle',
+  },
+  {
+    id: 'legs-pre-6', name: 'Pogo Hops',
+    category: 'legs', type: 'plyo', muscles: ['calves'],
+    defaultRepRange: [20, 20], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Small springy hops — primes tendons before box jumps',
   },
 
-  back: {
-    pre: [
-      { id: 'back-pre-1', name: 'Band Pull-Aparts',             reps: '15 reps',       restSeconds: 10 },
-      { id: 'back-pre-2', name: 'Scapular Wall Slides',         reps: '10 reps',       restSeconds: 15, note: 'Back flat against wall throughout' },
-      { id: 'back-pre-3', name: 'Cat-Cow',                      reps: '8 reps',        restSeconds: 10 },
-      { id: 'back-pre-4', name: 'Thoracic Rotations',           reps: '8/side',        restSeconds: 10 },
-      { id: 'back-pre-5', name: 'Dead Hang',                    reps: '20–30 seconds', restSeconds: 20, note: 'Mandatory before rows — decompresses spine' },
-    ],
-    post: [
-      { id: 'back-post-1', name: 'Lat Overhead Lean Stretch',   reps: '45s/side',   restSeconds: 20, note: 'Arm overhead, lean away — feel the lat' },
-      { id: 'back-post-2', name: "Child's Pose (Arms Extended)", reps: '60 seconds', restSeconds: 20 },
-      { id: 'back-post-3', name: 'Thread-the-Needle',           reps: '45s/side',   restSeconds: 20 },
-      { id: 'back-post-4', name: 'Doorway Chest Stretch',       reps: '30s/side',   restSeconds: 15, note: 'Releases anterior shoulder tightness from rows' },
-      { id: 'back-post-5', name: 'Thoracic Foam Roll',          reps: '60 seconds', restSeconds: 20, note: 'Or self-massage — works thoracic extensors' },
-    ],
+  // ─── Legs post-workout ────────────────────────────────────────
+  {
+    id: 'legs-post-1', name: 'Standing Quad Stretch',
+    category: 'legs', type: 'isometric', muscles: ['quads'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
   },
-};
+  {
+    id: 'legs-post-2', name: 'Standing Hamstring Fold',
+    category: 'legs', type: 'isometric', muscles: ['hamstrings'],
+    defaultRepRange: [60, 60], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Soft knees, let spine hang',
+  },
+  {
+    id: 'legs-post-3', name: 'Figure-4 Glute Stretch',
+    category: 'general', type: 'isometric', muscles: ['glutes'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+  {
+    id: 'legs-post-4', name: 'Hip Flexor Kneeling Lunge',
+    category: 'general', type: 'isometric', muscles: ['quads', 'glutes'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Back knee on ground — targets rectus femoris — per side',
+  },
+  {
+    id: 'legs-post-5', name: 'Calf Stretch (Wall)',
+    category: 'legs', type: 'isometric', muscles: ['calves'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+  {
+    id: 'legs-post-6', name: 'Pigeon Pose',
+    category: 'general', type: 'isometric', muscles: ['glutes'],
+    defaultRepRange: [60, 60], startingWeightKg: 0, restSeconds: 25,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Breathe into the hip — per side',
+  },
+
+  // ─── Core pre-workout ─────────────────────────────────────────
+  {
+    id: 'core-pre-1', name: 'Cat-Cow',
+    category: 'general', type: 'accessory', muscles: ['back', 'core'],
+    defaultRepRange: [8, 8], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true,
+  },
+  {
+    id: 'core-pre-2', name: 'Dead Bugs',
+    category: 'core', type: 'accessory', muscles: ['core'],
+    defaultRepRange: [8, 8], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Exhale on lower — slow and controlled',
+  },
+  {
+    id: 'core-pre-3', name: 'Bird Dogs',
+    category: 'core', type: 'accessory', muscles: ['core', 'back'],
+    defaultRepRange: [6, 6], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per side',
+  },
+  {
+    id: 'core-pre-5', name: 'Inchworms',
+    category: 'core', type: 'accessory', muscles: ['core', 'hamstrings'],
+    defaultRepRange: [5, 5], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true,
+  },
+
+  // ─── Core post-workout ────────────────────────────────────────
+  {
+    id: 'core-post-2', name: 'Cobra / Upward Dog',
+    category: 'core', type: 'isometric', muscles: ['core'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Counteract all the core flexion',
+  },
+  {
+    id: 'core-post-3', name: 'Supine Spinal Twist',
+    category: 'core', type: 'isometric', muscles: ['back', 'core'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+  {
+    id: 'core-post-5', name: 'Seated Forward Fold',
+    category: 'core', type: 'isometric', muscles: ['hamstrings', 'back'],
+    defaultRepRange: [60, 60], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Decompress spine, stretch hamstrings and lower back',
+  },
+
+  // ─── Glutes pre-workout ───────────────────────────────────────
+  {
+    id: 'glutes-pre-1', name: 'Glute Bridges (Activation)',
+    category: 'glutes', type: 'accessory', muscles: ['glutes'],
+    defaultRepRange: [15, 15], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Squeeze for 2s at top',
+  },
+  {
+    id: 'glutes-pre-2', name: 'Clamshells',
+    category: 'glutes', type: 'accessory', muscles: ['glutes'],
+    defaultRepRange: [12, 12], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per side',
+  },
+  {
+    id: 'glutes-pre-3', name: 'Fire Hydrants',
+    category: 'glutes', type: 'accessory', muscles: ['glutes'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 10,
+    isBodyweight: true, isStretch: true, notes: 'Per side',
+  },
+  {
+    id: 'glutes-pre-4', name: 'Dynamic Hip Flexor Lunges',
+    category: 'glutes', type: 'accessory', muscles: ['glutes', 'quads'],
+    defaultRepRange: [5, 5], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Per side',
+  },
+  {
+    id: 'glutes-pre-5', name: '90/90 Hip Switches',
+    category: 'glutes', type: 'accessory', muscles: ['glutes'],
+    defaultRepRange: [8, 8], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Slowly rotate between both hip positions',
+  },
+
+  // ─── Glutes post-workout ──────────────────────────────────────
+  {
+    id: 'glutes-post-2', name: 'Supine Hip Flexor Stretch',
+    category: 'glutes', type: 'isometric', muscles: ['glutes', 'quads'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+  {
+    id: 'glutes-post-4', name: 'Butterfly Stretch',
+    category: 'glutes', type: 'isometric', muscles: ['glutes'],
+    defaultRepRange: [60, 60], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Feet together, lean forward for inner thigh and glute',
+  },
+  {
+    id: 'glutes-post-5', name: 'Seated Cross-Leg Glute Stretch',
+    category: 'glutes', type: 'isometric', muscles: ['glutes'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Per side',
+  },
+
+  // ─── Back pre-workout ─────────────────────────────────────────
+  {
+    id: 'back-pre-2', name: 'Scapular Wall Slides (Back Day)',
+    category: 'back', type: 'accessory', muscles: ['back', 'shoulders'],
+    defaultRepRange: [10, 10], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, notes: 'Back flat against wall throughout',
+  },
+
+  // ─── Back post-workout ────────────────────────────────────────
+  {
+    id: 'back-post-1', name: 'Lat Overhead Lean Stretch (Back)',
+    category: 'back', type: 'isometric', muscles: ['back'],
+    defaultRepRange: [45, 45], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Arm overhead, lean away — feel the lat — per side',
+  },
+  {
+    id: 'back-post-4', name: 'Doorway Chest Stretch (Back Day)',
+    category: 'back', type: 'isometric', muscles: ['chest', 'shoulders'],
+    defaultRepRange: [30, 30], startingWeightKg: 0, restSeconds: 15,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Releases anterior shoulder tightness from rows — per side',
+  },
+  {
+    id: 'back-post-5', name: 'Thoracic Foam Roll',
+    category: 'back', type: 'isometric', muscles: ['back'],
+    defaultRepRange: [60, 60], startingWeightKg: 0, restSeconds: 20,
+    isBodyweight: true, isStretch: true, isTimed: true, notes: 'Or self-massage — works thoracic extensors',
+  },
+];
+
+export const stretchMap = new Map(stretches.map((s) => [s.id, s]));

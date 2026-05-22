@@ -25,7 +25,7 @@ type Props = {
 
 export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, returnTo }: Props) {
   const navigate = useNavigate();
-  const allExercises = useExercises();
+  const allExercises = useExercises().filter((e) => !e.isStretch);
   const excludeSet = new Set(excludeIds);
 
   const handleCreate = () => {
