@@ -360,9 +360,9 @@ export default function ExerciseDetail() {
 
         {/* Badges */}
         <div className="flex flex-wrap gap-2 py-4" style={{ borderBottom: 'var(--border-thin)' }}>
-          {[exercise.category, exercise.type, ...exercise.muscles].map((tag) => (
+          {[exercise.category, exercise.type, ...exercise.muscles].map((tag, i) => (
             <span
-              key={tag}
+              key={`${tag}-${i}`}
               className="font-body uppercase tracking-widest px-2 py-0.5"
               style={{
                 fontSize: 'var(--text-micro)',
