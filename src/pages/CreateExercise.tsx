@@ -203,7 +203,7 @@ export default function CreateExercise() {
       } else {
         await createExercise(exercise);
       }
-      navigate(returnTo ?? (isEditMode ? `/exercise/${exerciseId}` : '/exercises'));
+      navigate(returnTo ?? (isEditMode ? `/exercise/${exerciseId}` : '/exercises'), { replace: true });
     } finally {
       setSaving(false);
     }

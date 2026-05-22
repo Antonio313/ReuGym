@@ -163,10 +163,12 @@ function SessionRow({
   session,
   sets,
   isBodyweight,
+  isTimed,
 }: {
   session: WorkoutSession;
   sets: LoggedSet[];
   isBodyweight: boolean;
+  isTimed: boolean;
 }) {
   const workSets = sets.filter((s) => !s.isWarmup);
   const best = isBodyweight ? topReps(sets) : topSet(sets);
@@ -195,9 +197,11 @@ function SessionRow({
 
       {best && (
         <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-          {isBodyweight
-            ? `${best.reps} reps`
-            : `${best.weightKg}kg × ${best.reps}`}
+          {isTimed
+            ? `${best.reps}s`
+            : isBodyweight
+              ? `${best.reps} reps`
+              : `${best.weightKg}kg × ${best.reps}`}
         </p>
       )}
     </div>
@@ -333,10 +337,10 @@ export default function ExerciseDetail() {
         <div className="flex gap-6 py-4" style={{ borderBottom: 'var(--border-thin)' }}>
           <div>
             <p className="font-body uppercase tracking-widest mb-1" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
-              Default reps
+              {exercise.isTimed ? 'Default seconds' : 'Default reps'}
             </p>
             <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-              {exercise.defaultRepRange[0]}–{exercise.defaultRepRange[1]}
+              {exercise.defaultRepRange[0]}–{exercise.defaultRepRange[1]}{exercise.isTimed ? 's' : ''}
             </p>
           </div>
           <div>
@@ -378,9 +382,11 @@ export default function ExerciseDetail() {
               Personal Best
             </p>
             <p className="font-mono" data-numeric style={{ fontSize: 'clamp(1.75rem, 7vw, 2.5rem)', color: 'var(--color-text)', lineHeight: 1 }}>
-              {isBodyweight
-                ? `${prSet.reps} reps`
-                : `${prSet.weightKg}kg × ${prSet.reps}`}
+              {exercise.isTimed
+                ? `${prSet.reps}s`
+                : isBodyweight
+                  ? `${prSet.reps} reps`
+                  : `${prSet.weightKg}kg × ${prSet.reps}`}
             </p>
             <div className="flex items-center gap-3 mt-2">
               {prSession && (
@@ -404,7 +410,7 @@ export default function ExerciseDetail() {
               className="font-body uppercase tracking-widest mb-3"
               style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
             >
-              {isBodyweight ? 'Best Reps' : 'Top Weight'} per Session
+              {exercise.isTimed ? 'Best Time' : isBodyweight ? 'Best Reps' : 'Top Weight'} per Session
             </p>
             <LineChart points={chartPoints} />
           </div>
@@ -446,6 +452,7 @@ export default function ExerciseDetail() {
               session={session}
               sets={bySession.get(session.id) ?? []}
               isBodyweight={isBodyweight}
+              isTimed={exercise.isTimed ?? false}
             />
           ))}
         </div>
