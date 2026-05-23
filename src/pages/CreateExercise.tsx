@@ -12,7 +12,7 @@ import type { ExerciseCategory, ExerciseType, MuscleGroup } from '@/types';
 
 const schema = z.object({
   name:             z.string().min(1, 'Name is required').max(60),
-  category:         z.enum(['push', 'pull', 'legs', 'core', 'glutes', 'back']),
+  category:         z.enum(['push', 'pull', 'legs', 'core', 'glutes', 'back', 'general']),
   type:             z.enum(['compound', 'accessory', 'plyo', 'isometric']),
   muscles:          z.array(z.string()).min(1, 'Select at least one muscle group'),
   repRangeMin:      z.number().int().min(1).max(9999),
