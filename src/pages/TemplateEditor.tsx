@@ -27,7 +27,7 @@ export default function TemplateEditor() {
   const allStretches = useStretches();
   const stretchExMap = new Map(allStretches.map((s) => [s.id, s]));
 
-  const liveTemplate = useTemplate(id ?? '');
+  const [liveTemplate, reloadTemplate] = useTemplate(id ?? '');
   const template = liveTemplate ?? (id ? defaultTemplateMap.get(id) : undefined);
 
   const stretches = useDayStretches(id ?? '');
@@ -46,7 +46,7 @@ export default function TemplateEditor() {
 
   const update = (exercises: TemplateExercise[]) => {
     const updated: WorkoutTemplate = { ...template, exercises };
-    saveTemplate(updated);
+    void saveTemplate(updated).then(reloadTemplate);
   };
 
   // Clears the superset state of the exercise at `index` and its pair partner (if any)

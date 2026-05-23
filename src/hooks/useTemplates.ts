@@ -17,7 +17,7 @@ function rowToTemplateExercise(row: Record<string, unknown>): TemplateExercise {
   };
 }
 
-export function useTemplate(templateId: string): WorkoutTemplate | undefined {
+export function useTemplate(templateId: string): [WorkoutTemplate | undefined, () => void] {
   const [template, setTemplate] = useState<WorkoutTemplate | undefined>(undefined);
 
   const load = useCallback(async () => {
@@ -39,7 +39,7 @@ export function useTemplate(templateId: string): WorkoutTemplate | undefined {
 
   useEffect(() => { void load(); }, [load]);
 
-  return template;
+  return [template, load];
 }
 
 export async function saveTemplate(template: WorkoutTemplate): Promise<void> {

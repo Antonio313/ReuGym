@@ -49,7 +49,7 @@ export default function WorkoutActive() {
   // pendingRest holds the seconds to start after feeling queue drains
   const pendingRestRef = useRef<number | null>(null);
 
-  const liveTemplate = useTemplate(templateId ?? '');
+  const [liveTemplate] = useTemplate(templateId ?? '');
   const template = liveTemplate ?? (templateId ? defaultTemplateMap.get(templateId) : undefined);
 
   const allExercises = useExercises();
