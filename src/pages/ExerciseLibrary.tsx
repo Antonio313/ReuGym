@@ -5,6 +5,17 @@ import { PageShell } from '@/components/layout/PageShell';
 import { useExercises, useStretches } from '@/hooks/useExercises';
 import type { ExerciseCategory } from '@/types';
 
+function formatRepRange(min: number, max: number, isTimed = false): string {
+  const unit = isTimed ? 's' : '';
+  return min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
+}
+
+function weightLabel(startingWeightKg: number, isBodyweight: boolean): string {
+  if (isBodyweight) return 'BW';
+  if (startingWeightKg === 0) return '—';
+  return `${startingWeightKg}kg`;
+}
+
 const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back'];
 const STRETCH_CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back', 'general'];
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
@@ -132,8 +143,13 @@ export default function ExerciseLibrary() {
                       {ex.muscles.join(' · ')}
                     </span>
                   </span>
-                  <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: '0.5rem' }}>
-                    {ex.defaultRepRange[0]}–{ex.defaultRepRange[1]}
+                  <span className="flex flex-col items-end" style={{ flexShrink: 0, marginLeft: '0.5rem' }}>
+                    <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+                      {formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed)}
+                    </span>
+                    <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
+                      {weightLabel(ex.startingWeightKg, ex.isBodyweight)}
+                    </span>
                   </span>
                 </button>
               ))
@@ -177,7 +193,7 @@ export default function ExerciseLibrary() {
                         </span>
                       </span>
                       <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: '0.5rem' }}>
-                        {ex.defaultRepRange[0]}–{ex.defaultRepRange[1]}
+                        {formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed)}
                       </span>
                     </button>
                   ))}
@@ -202,9 +218,7 @@ export default function ExerciseLibrary() {
             </div>
           ) : isSearching ? (
             filteredStretches.map((s) => {
-              const repsDisplay = s.isTimed
-                ? `${s.defaultRepRange[0]}–${s.defaultRepRange[1]}s`
-                : `${s.defaultRepRange[0]}–${s.defaultRepRange[1]} reps`;
+              const repsDisplay = formatRepRange(s.defaultRepRange[0], s.defaultRepRange[1], s.isTimed);
               return (
                 <button
                   key={s.id}
@@ -247,9 +261,7 @@ export default function ExerciseLibrary() {
                     </span>
                   </p>
                   {catStretches.map((s) => {
-                    const repsDisplay = s.isTimed
-                      ? `${s.defaultRepRange[0]}–${s.defaultRepRange[1]}s`
-                      : `${s.defaultRepRange[0]}–${s.defaultRepRange[1]} reps`;
+                    const repsDisplay = formatRepRange(s.defaultRepRange[0], s.defaultRepRange[1], s.isTimed);
                     return (
                       <button
                         key={s.id}

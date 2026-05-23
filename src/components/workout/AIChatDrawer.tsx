@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import ReactMarkdown from 'react-markdown';
 import { PaperPlaneTilt, X, Check } from '@phosphor-icons/react';
 import { Drawer, DrawerContent } from '@/components/ui/drawer';
 import { useExercises, useStretches } from '@/hooks/useExercises';
@@ -380,9 +381,20 @@ export function AIChatDrawer({ open, onClose, onActionsApplied }: Props) {
                   wordBreak: 'break-word',
                 }}
               >
-                {msg.fresh && msg.role === 'assistant'
-                  ? <TypewriterText text={msg.content} onDone={() => clearFresh(i)} />
-                  : msg.content}
+                {msg.role === 'user' ? msg.content
+                  : msg.fresh
+                    ? <TypewriterText text={msg.content} onDone={() => clearFresh(i)} />
+                    : <ReactMarkdown
+                        components={{
+                          p:      ({ children }) => <span style={{ display: 'block' }}>{children}</span>,
+                          strong: ({ children }) => <strong style={{ color: 'var(--color-text)', fontWeight: 600 }}>{children}</strong>,
+                          em:     ({ children }) => <em>{children}</em>,
+                          ul:     ({ children }) => <ul style={{ paddingLeft: '1.2em', marginTop: '0.25em' }}>{children}</ul>,
+                          ol:     ({ children }) => <ol style={{ paddingLeft: '1.2em', marginTop: '0.25em' }}>{children}</ol>,
+                          li:     ({ children }) => <li style={{ marginBottom: '0.15em' }}>{children}</li>,
+                        }}
+                      >{msg.content}</ReactMarkdown>
+                }
               </div>
 
               {msg.proposedActions && (
