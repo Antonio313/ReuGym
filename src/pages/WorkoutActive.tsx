@@ -55,7 +55,7 @@ export default function WorkoutActive() {
   const allExercises = useExercises();
   const exerciseMap = new Map(allExercises.map((e) => [e.id, e]));
 
-  const dayStretches = useDayStretches(templateId ?? '');
+  const [dayStretches] = useDayStretches(templateId ?? '');
   const allStretches = useStretches();
   const stretchExMap = new Map(allStretches.map((s) => [s.id, s]));
 

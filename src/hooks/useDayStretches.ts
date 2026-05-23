@@ -14,7 +14,7 @@ function rowToDayStretch(row: Record<string, unknown>): DayStretch {
   };
 }
 
-export function useDayStretches(templateId: string): DayStretchData {
+export function useDayStretches(templateId: string): [DayStretchData, () => void] {
   const [data, setData] = useState<DayStretchData>({ pre: [], post: [] });
 
   const load = useCallback(async () => {
@@ -38,7 +38,7 @@ export function useDayStretches(templateId: string): DayStretchData {
 
   useEffect(() => { void load(); }, [load]);
 
-  return data;
+  return [data, load];
 }
 
 export async function saveDayStretches(

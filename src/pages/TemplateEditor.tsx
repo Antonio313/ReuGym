@@ -30,7 +30,7 @@ export default function TemplateEditor() {
   const [liveTemplate, reloadTemplate] = useTemplate(id ?? '');
   const template = liveTemplate ?? (id ? defaultTemplateMap.get(id) : undefined);
 
-  const stretches = useDayStretches(id ?? '');
+  const [stretches, reloadStretches] = useDayStretches(id ?? '');
 
   if (!template) {
     return (
@@ -128,28 +128,29 @@ export default function TemplateEditor() {
 
   // ── Stretch helpers ───────────────────────────────────────────
 
+  const saveStretches = (pre: DayStretch[], post: DayStretch[]) => {
+    void saveDayStretches(id ?? '', pre, post).then(reloadStretches);
+  };
+
   const moveStretch = (phase: 'pre' | 'post', index: number, direction: 'up' | 'down') => {
     const list = [...(phase === 'pre' ? stretches.pre : stretches.post)];
     const target = direction === 'up' ? index - 1 : index + 1;
     if (target < 0 || target >= list.length) return;
     [list[index], list[target]] = [list[target], list[index]];
-    if (phase === 'pre') void saveDayStretches(id ?? '', list, stretches.post);
-    else void saveDayStretches(id ?? '', stretches.pre, list);
+    if (phase === 'pre') saveStretches(list, stretches.post);
+    else saveStretches(stretches.pre, list);
   };
 
   const removeStretch = (phase: 'pre' | 'post', index: number) => {
     const list = (phase === 'pre' ? stretches.pre : stretches.post).filter((_, i) => i !== index);
-    if (phase === 'pre') void saveDayStretches(id ?? '', list, stretches.post);
-    else void saveDayStretches(id ?? '', stretches.pre, list);
+    if (phase === 'pre') saveStretches(list, stretches.post);
+    else saveStretches(stretches.pre, list);
   };
 
   const addStretchFromLibrary = (phase: 'pre' | 'post', exercise: Exercise) => {
     const assignment: DayStretch = { id: nanoid(), exerciseId: exercise.id, restSeconds: exercise.restSeconds };
-    if (phase === 'pre') {
-      void saveDayStretches(id ?? '', [...stretches.pre, assignment], stretches.post);
-    } else {
-      void saveDayStretches(id ?? '', stretches.pre, [...stretches.post, assignment]);
-    }
+    if (phase === 'pre') saveStretches([...stretches.pre, assignment], stretches.post);
+    else saveStretches(stretches.pre, [...stretches.post, assignment]);
   };
 
   const currentIds = template.exercises.map((e) => e.exerciseId);
