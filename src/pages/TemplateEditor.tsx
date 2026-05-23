@@ -10,6 +10,11 @@ import { useDayStretches, saveDayStretches } from '@/hooks/useDayStretches';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import type { TemplateExercise, WorkoutTemplate, DayStretch, Exercise } from '@/types';
 
+function formatRepRange(min: number, max: number, isTimed = false): string {
+  const unit = isTimed ? 's' : ' reps';
+  return min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
+}
+
 export default function TemplateEditor() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -297,7 +302,10 @@ export default function TemplateEditor() {
                       data-numeric
                       style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
                     >
-                      · {entry.repRange[0]}–{entry.repRange[1]} reps
+                      · {formatRepRange(entry.repRange[0], entry.repRange[1], exercise?.isTimed)}
+                      {exercise && (
+                        <> · {exercise.isBodyweight ? 'BW' : `${exercise.startingWeightKg}kg`}</>
+                      )}
                     </span>
                   </div>
                 </div>
@@ -413,9 +421,7 @@ function StretchSection({ label, stretches, stretchExMap, onMoveUp, onMoveDown, 
       {stretches.map((s, i) => {
         const ex = stretchExMap.get(s.exerciseId);
         const repsDisplay = ex
-          ? (ex.isTimed
-              ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]}s`
-              : `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps`)
+          ? formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed)
           : s.exerciseId;
         return (
           <div

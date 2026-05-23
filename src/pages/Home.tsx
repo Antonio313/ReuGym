@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { PencilSimple } from '@phosphor-icons/react';
+import { PencilSimple, ChatCircle } from '@phosphor-icons/react';
 import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
+import { AIChatDrawer } from '@/components/workout/AIChatDrawer';
 import { useTemplates } from '@/hooks/useTemplates';
 import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
@@ -108,7 +109,7 @@ export default function Home() {
   const navigate = useNavigate();
 
   const templates = useTemplates();
-
+  const [aiOpen, setAiOpen] = useState(false);
   const [lastSessions, setLastSessions] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -168,6 +169,35 @@ export default function Home() {
           </button>
         )}
       </main>
+
+      {/* Floating AI chat button */}
+      <button
+        onClick={() => setAiOpen(true)}
+        aria-label="Open AI assistant"
+        style={{
+          position: 'fixed',
+          bottom: 'calc(var(--bottom-nav-height) + 1rem)',
+          right: '1rem',
+          width: '3rem',
+          height: '3rem',
+          borderRadius: '50%',
+          background: 'var(--color-accent)',
+          color: '#fff',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          boxShadow: '0 4px 16px rgba(255, 77, 0, 0.35)',
+          zIndex: 30,
+        }}
+      >
+        <ChatCircle size={22} weight="fill" />
+      </button>
+
+      <AIChatDrawer
+        open={aiOpen}
+        onClose={() => setAiOpen(false)}
+        onActionsApplied={() => setAiOpen(false)}
+      />
     </PageShell>
   );
 }

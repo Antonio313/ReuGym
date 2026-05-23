@@ -1,10 +1,11 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { Link } from 'react-router-dom';
-import { ClockCounterClockwise, Trophy } from '@phosphor-icons/react';
+import { ClockCounterClockwise, Trophy, Export, Upload, DeviceMobile } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { exportData, importFromJson, migrateFromIndexedDB, type ImportResult } from '@/lib/dataTransfer';
 import { useExercises } from '@/hooks/useExercises';
 import { useTemplates } from '@/hooks/useTemplates';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
@@ -147,6 +148,66 @@ export default function WorkoutHistory() {
   };
 
   const [enrichedSessions, setEnrichedSessions] = useState<EnrichedSession[] | undefined>(undefined);
+  const [transferState, setTransferState] = useState<'idle' | 'exporting' | 'importing' | 'migrating'>('idle');
+  const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [showImportMenu, setShowImportMenu] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const refreshRef = useRef(0);
+
+  const handleExport = async () => {
+    const user = getLocalSession();
+    if (!user) return;
+    setTransferState('exporting');
+    try {
+      await exportData(user.id);
+    } finally {
+      setTransferState('idle');
+    }
+  };
+
+  const handleFileImport = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    const user = getLocalSession();
+    if (!user) return;
+    setTransferState('importing');
+    setImportError(null);
+    setImportResult(null);
+    setShowImportMenu(false);
+    try {
+      const text = await file.text();
+      const json = JSON.parse(text);
+      const result = await importFromJson(json, user.id);
+      setImportResult(result);
+      refreshRef.current += 1;
+      // Re-trigger the history fetch by updating enrichedSessions
+      setEnrichedSessions(undefined);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Failed to import file.');
+    } finally {
+      setTransferState('idle');
+    }
+  };
+
+  const handleMigrate = async () => {
+    const user = getLocalSession();
+    if (!user) return;
+    setTransferState('migrating');
+    setImportError(null);
+    setImportResult(null);
+    setShowImportMenu(false);
+    try {
+      const result = await migrateFromIndexedDB(user.id);
+      setImportResult(result);
+      setEnrichedSessions(undefined);
+    } catch (err) {
+      setImportError(err instanceof Error ? err.message : 'Migration failed.');
+    } finally {
+      setTransferState('idle');
+    }
+  };
 
   useEffect(() => {
     const user = getLocalSession();
@@ -215,7 +276,7 @@ export default function WorkoutHistory() {
     <PageShell>
       {/* Header */}
       <header
-        className="sticky top-0 z-40 flex items-center px-4"
+        className="sticky top-0 z-40 flex items-center justify-between px-4"
         style={{
           height: 'var(--header-height)',
           background: 'var(--color-bg)',
@@ -228,7 +289,106 @@ export default function WorkoutHistory() {
         >
           HISTORY
         </span>
+
+        <div className="flex items-center gap-3">
+          {/* Export */}
+          <button
+            onClick={handleExport}
+            disabled={transferState !== 'idle'}
+            className="flex items-center gap-1.5 font-body"
+            style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
+            title="Export backup"
+          >
+            <Export size={16} />
+            <span>{transferState === 'exporting' ? 'Exporting…' : 'Export'}</span>
+          </button>
+
+          {/* Import menu trigger */}
+          <div className="relative">
+            <button
+              onClick={() => setShowImportMenu((v) => !v)}
+              disabled={transferState !== 'idle'}
+              className="flex items-center gap-1.5 font-body"
+              style={{ fontSize: 'var(--text-meta)', color: 'var(--color-accent)' }}
+            >
+              <Upload size={16} />
+              <span>
+                {transferState === 'importing' ? 'Importing…' : transferState === 'migrating' ? 'Migrating…' : 'Import'}
+              </span>
+            </button>
+
+            {showImportMenu && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setShowImportMenu(false)} />
+                <div
+                  className="absolute right-0 top-full mt-1 flex flex-col z-50"
+                style={{
+                  background: 'var(--color-surface)',
+                  border: '1px solid var(--color-border)',
+                  borderRadius: 'var(--radius-md)',
+                  minWidth: '13rem',
+                  boxShadow: '0 4px 16px rgba(0,0,0,0.4)',
+                }}
+              >
+                <button
+                  onClick={() => { setShowImportMenu(false); fileInputRef.current?.click(); }}
+                  className="flex items-center gap-2 px-4 py-3 font-body text-left"
+                  style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)', borderBottom: 'var(--border-thin)' }}
+                >
+                  <Upload size={15} />
+                  From file
+                </button>
+                <button
+                  onClick={handleMigrate}
+                  className="flex items-center gap-2 px-4 py-3 font-body text-left"
+                  style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}
+                >
+                  <DeviceMobile size={15} />
+                  From this browser
+                </button>
+                <p className="px-4 pb-3 font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)', lineHeight: 1.4 }}>
+                  "From this browser" migrates data from the old app stored locally on this device.
+                </p>
+              </div>
+              </>
+            )}
+          </div>
+        </div>
       </header>
+
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".json,application/json"
+        onChange={handleFileImport}
+        style={{ display: 'none' }}
+      />
+
+      {/* Import result / error banner */}
+      {importResult && (
+        <div
+          className="px-4 py-3 flex items-center justify-between"
+          style={{ background: 'var(--color-surface)', borderBottom: 'var(--border-thin)' }}
+        >
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-success)' }}>
+            Imported {importResult.sessions} sessions · {importResult.sets} sets
+            {importResult.bodyStats > 0 ? ` · ${importResult.bodyStats} body stats` : ''}
+          </p>
+          <button onClick={() => setImportResult(null)} style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)' }}>✕</button>
+        </div>
+      )}
+      {importError && (
+        <div
+          className="px-4 py-3 flex items-center justify-between"
+          style={{ background: 'var(--color-surface)', borderBottom: 'var(--border-thin)' }}
+        >
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}>
+            {importError}
+          </p>
+          <button onClick={() => setImportError(null)} style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)' }}>✕</button>
+        </div>
+      )}
 
       <main>
         {loading && (

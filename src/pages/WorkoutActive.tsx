@@ -453,6 +453,7 @@ export default function WorkoutActive() {
         stretchExMap={stretchExMap}
         prefsMap={prefsMap}
         onBegin={handleStartWorkout}
+        onBack={() => navigate(-1)}
       />
     );
   }

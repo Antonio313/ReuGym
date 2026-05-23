@@ -1,3 +1,4 @@
+import { ArrowLeft } from '@phosphor-icons/react';
 import type { WorkoutTemplate, Exercise, ExercisePref, DayStretch } from '@/types';
 
 type Props = {
@@ -7,6 +8,7 @@ type Props = {
   stretchExMap: Map<string, Exercise>;
   prefsMap: Map<string, ExercisePref>;
   onBegin: () => void;
+  onBack: () => void;
 };
 
 function weightLabel(exercise: Exercise, pref: ExercisePref | undefined): string {
@@ -15,7 +17,12 @@ function weightLabel(exercise: Exercise, pref: ExercisePref | undefined): string
   return `${w}kg`;
 }
 
-export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExMap, prefsMap, onBegin }: Props) {
+function formatRepRange(min: number, max: number, isTimed = false): string {
+  const unit = isTimed ? 's' : '';
+  return min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
+}
+
+export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExMap, prefsMap, onBegin, onBack }: Props) {
   return (
     <div
       className="flex flex-col min-h-dvh mx-auto"
@@ -23,21 +30,26 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
     >
       {/* Header */}
       <div
-        className="px-4 pt-6 pb-4"
-        style={{ borderBottom: 'var(--border-thin)' }}
+        className="flex items-center gap-3 px-4 sticky top-0 z-10"
+        style={{ height: 'var(--header-height)', borderBottom: 'var(--border-thin)', background: 'var(--color-bg)' }}
       >
-        <p
-          className="font-body uppercase tracking-widest mb-1"
-          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-        >
-          Today's Workout
-        </p>
-        <h1
-          className="font-display"
-          style={{ fontSize: 'clamp(2rem, 8vw, 3rem)', color: 'var(--color-text)', letterSpacing: '0.02em' }}
-        >
-          {template.shortLabel}
-        </h1>
+        <button onClick={onBack} style={{ color: 'var(--color-text-muted)' }} aria-label="Go back">
+          <ArrowLeft size={22} />
+        </button>
+        <div>
+          <p
+            className="font-body uppercase tracking-widest"
+            style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+          >
+            Today's Workout
+          </p>
+          <h1
+            className="font-display leading-none"
+            style={{ fontSize: 'var(--text-h1)', color: 'var(--color-text)', letterSpacing: '0.02em' }}
+          >
+            {template.shortLabel}
+          </h1>
+        </div>
       </div>
 
       {/* Scrollable content */}
@@ -58,9 +70,7 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
             {dayStretches.pre.map((s, i) => {
               const ex = stretchExMap.get(s.exerciseId);
               if (!ex) return null;
-              const repsDisplay = ex.isTimed
-                ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]}s`
-                : `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps`;
+              const repsDisplay = formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed);
               return (
                 <div
                   key={s.id}
@@ -114,7 +124,7 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
                   </div>
                   <div className="text-right flex-shrink-0 ml-3">
                     <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-                      {te.sets}×{te.repRange[0]}–{te.repRange[1]}
+                      {te.sets}×{formatRepRange(te.repRange[0], te.repRange[1], ex.isTimed)}
                     </p>
                     <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>
                       {weightLabel(ex, pref)}
@@ -141,9 +151,7 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
             {dayStretches.post.map((s, i) => {
               const ex = stretchExMap.get(s.exerciseId);
               if (!ex) return null;
-              const repsDisplay = ex.isTimed
-                ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]}s`
-                : `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps`;
+              const repsDisplay = formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed);
               return (
                 <div
                   key={s.id}
