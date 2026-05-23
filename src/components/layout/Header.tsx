@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SignOut } from '@phosphor-icons/react';
-import { signOut } from '@/lib/auth';
+import { useAuth } from '@/context/AuthContext';
 
 type HeaderProps = {
   subtitle?: ReactNode;
@@ -9,6 +9,7 @@ type HeaderProps = {
 
 export function Header({ subtitle }: HeaderProps) {
   const navigate = useNavigate();
+  const { signOut } = useAuth();
 
   const handleLogout = () => {
     signOut();

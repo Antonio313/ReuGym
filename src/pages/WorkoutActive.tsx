@@ -701,7 +701,7 @@ export default function WorkoutActive() {
                       data-numeric
                       style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
                     >
-                      {te.sets} × {te.repRange[0]}–{te.repRange[1]}{ex?.isTimed ? 's' : ' reps'}
+                      {te.sets} × {formatRepRange(te.repRange[0], te.repRange[1], ex?.isTimed)}
                     </p>
                   </div>
                   {isCurrent && (
@@ -732,6 +732,11 @@ export default function WorkoutActive() {
 }
 
 // ── Helpers ──────────────────────────────────────────────────────
+
+function formatRepRange(min: number, max: number, isTimed = false): string {
+  const unit = isTimed ? 's' : ' reps';
+  return min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
+}
 
 function getRestSecondsForExercise(
   exerciseId: string,
