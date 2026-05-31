@@ -34,7 +34,9 @@ export function useTemplate(templateId: string): [WorkoutTemplate | undefined, (
       .eq('template_id', templateId)
       .order('position');
 
-    setTemplate({ ...meta, exercises: data ? data.map(rowToTemplateExercise) : [] });
+    // Fall back to static exercises when Supabase has no rows yet (fresh account or data loss)
+    const exercises = (data && data.length > 0) ? data.map(rowToTemplateExercise) : meta.exercises;
+    setTemplate({ ...meta, exercises });
   }, [templateId]);
 
   useEffect(() => { void load(); }, [load]);
