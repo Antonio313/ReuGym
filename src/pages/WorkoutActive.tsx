@@ -251,10 +251,6 @@ export default function WorkoutActive() {
 
     const isLastSet = currentSetNumber === currTE.sets;
     const isLastMainExercise = currentExerciseIndex === template.exercises.length - 1;
-    // "last exercise" means no more exercises to do — main or deferred
-    const isLastExercise = isWorkingThroughSkipped
-      ? skippedIndices.length === 0
-      : (isLastMainExercise && skippedIndices.length === 0);
 
     // Superset detection
     const isFirstInPair =
