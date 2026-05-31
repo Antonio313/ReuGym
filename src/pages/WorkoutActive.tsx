@@ -49,6 +49,11 @@ export default function WorkoutActive() {
   // pendingRest holds the seconds to start after feeling queue drains
   const pendingRestRef = useRef<number | null>(null);
 
+  // Skip-exercise state: indices deferred to end of workout
+  const [skippedIndices, setSkippedIndices] = useState<number[]>([]);
+  const [isWorkingThroughSkipped, setIsWorkingThroughSkipped] = useState(false);
+  const [pendingSkippedIndex, setPendingSkippedIndex] = useState<number | null>(null);
+
   const [liveTemplate] = useTemplate(templateId ?? '');
   const template = liveTemplate ?? (templateId ? defaultTemplateMap.get(templateId) : undefined);
 
@@ -122,13 +127,16 @@ export default function WorkoutActive() {
     return () => clearInterval(id);
   }, [restTimerActive, tickRestTimer]);
 
-  // When rest ends, play sound + haptics; if last set, finish workout
+  // When rest ends, play sound + haptics; then complete or advance to a deferred exercise
   useEffect(() => {
     if (status === 'active' && prevStatus.current === 'resting') {
       playTimerEnd();
       haptics.timer();
       if (completingAfterRest) {
         void finishWorkout();
+      } else if (pendingSkippedIndex !== null) {
+        setExerciseAndSet(pendingSkippedIndex, 1);
+        setPendingSkippedIndex(null);
       }
     }
     prevStatus.current = status;
@@ -175,6 +183,9 @@ export default function WorkoutActive() {
     completeSession();
     resetSession();
     setStretchIndex(0);
+    setSkippedIndices([]);
+    setIsWorkingThroughSkipped(false);
+    setPendingSkippedIndex(null);
     setPhase(dayStretches.post.length > 0 ? 'post-stretch' : 'complete');
   };
 
@@ -192,6 +203,28 @@ export default function WorkoutActive() {
     enableWakeLock();
     setStretchIndex(0);
     setPhase(dayStretches.pre.length > 0 ? 'pre-stretch' : 'workout');
+  };
+
+  const handleSkipExercise = () => {
+    if (!template || isWorkingThroughSkipped) return;
+    const currTE = template.exercises[currentExerciseIndex];
+    if (currTE.isSuperset) return; // supersets can't be skipped mid-pair
+
+    haptics.light();
+
+    const newSkipped = [...skippedIndices, currentExerciseIndex];
+    const isLastMain = currentExerciseIndex === template.exercises.length - 1;
+
+    if (!isLastMain) {
+      setSkippedIndices(newSkipped);
+      nextExercise();
+    } else {
+      // Skipped the last main exercise — jump straight to the first deferred one
+      const [first, ...rest] = newSkipped;
+      setSkippedIndices(rest);
+      setIsWorkingThroughSkipped(true);
+      setExerciseAndSet(first, 1);
+    }
   };
 
   const handleStretchNext = () => {
@@ -217,7 +250,11 @@ export default function WorkoutActive() {
     const prevTE = template.exercises[currentExerciseIndex - 1];
 
     const isLastSet = currentSetNumber === currTE.sets;
-    const isLastExercise = currentExerciseIndex === template.exercises.length - 1;
+    const isLastMainExercise = currentExerciseIndex === template.exercises.length - 1;
+    // "last exercise" means no more exercises to do — main or deferred
+    const isLastExercise = isWorkingThroughSkipped
+      ? skippedIndices.length === 0
+      : (isLastMainExercise && skippedIndices.length === 0);
 
     // Superset detection
     const isFirstInPair =
@@ -299,7 +336,10 @@ export default function WorkoutActive() {
           });
         }
 
-        if (!isLastExercise) {
+        const hasMoreMain = !isLastMainExercise && !isWorkingThroughSkipped;
+        const hasMoreDeferred = skippedIndices.length > 0;
+
+        if (hasMoreMain) {
           const nextNonSupersetEx = template.exercises[currentExerciseIndex + 1];
           const nextEx = exerciseMap.get(nextNonSupersetEx.exerciseId);
           const nextName = nextEx?.name ?? '';
@@ -316,6 +356,24 @@ export default function WorkoutActive() {
             setRestNextTarget(null);
           }
           nextExercise();
+        } else if (hasMoreDeferred) {
+          const [first, ...rest] = skippedIndices;
+          const nextEx = exerciseMap.get(template.exercises[first].exerciseId);
+          setRestLabel(`Next: ${nextEx?.name ?? ''} (deferred)`);
+          if (nextEx) {
+            const pref = prefsMap.get(nextEx.id);
+            setRestNextExercise(nextEx);
+            setRestNextTarget({
+              weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+              reps: template.exercises[first].repRange,
+            });
+          } else {
+            setRestNextExercise(null);
+            setRestNextTarget(null);
+          }
+          setPendingSkippedIndex(first);
+          setSkippedIndices(rest);
+          if (!isWorkingThroughSkipped) setIsWorkingThroughSkipped(true);
         } else {
           setRestNextExercise(null);
           setRestNextTarget(null);
@@ -336,12 +394,17 @@ export default function WorkoutActive() {
     // ── Non-superset exercise ─────────────────────────────────────
     logSet(activeSet);
     const exerciseName = exerciseMap.get(currTE.exerciseId)?.name ?? '';
+    const hasMoreMain = !isLastMainExercise && !isWorkingThroughSkipped;
+    const hasMoreDeferred = skippedIndices.length > 0;
+
     let label: string;
     if (!isLastSet) {
       label = `Set ${currentSetNumber + 1} of ${currTE.sets} · ${exerciseName}`;
-    } else if (!isLastExercise) {
+    } else if (hasMoreMain) {
       const nextTeEntry = template.exercises[currentExerciseIndex + 1];
       label = `Next: ${exerciseMap.get(nextTeEntry.exerciseId)?.name ?? ''}`;
+    } else if (hasMoreDeferred) {
+      label = `Next: ${exerciseMap.get(template.exercises[skippedIndices[0]].exerciseId)?.name ?? ''} (deferred)`;
     } else {
       label = "That's the last set — cool down time";
     }
@@ -361,7 +424,7 @@ export default function WorkoutActive() {
         setRestNextExercise(null);
         setRestNextTarget(null);
       }
-    } else if (!isLastExercise) {
+    } else if (hasMoreMain) {
       const nextTeEntry = template.exercises[currentExerciseIndex + 1];
       const nextEx = exerciseMap.get(nextTeEntry.exerciseId);
       if (nextEx) {
@@ -370,6 +433,20 @@ export default function WorkoutActive() {
         setRestNextTarget({
           weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
           reps: nextTeEntry.repRange,
+        });
+      } else {
+        setRestNextExercise(null);
+        setRestNextTarget(null);
+      }
+    } else if (hasMoreDeferred) {
+      const nextSkippedTE = template.exercises[skippedIndices[0]];
+      const nextEx = exerciseMap.get(nextSkippedTE.exerciseId);
+      if (nextEx) {
+        const pref = prefsMap.get(nextEx.id);
+        setRestNextExercise(nextEx);
+        setRestNextTarget({
+          weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+          reps: nextSkippedTE.repRange,
         });
       } else {
         setRestNextExercise(null);
@@ -387,8 +464,13 @@ export default function WorkoutActive() {
       const exercise = exerciseMap.get(currTE.exerciseId) ?? staticExerciseMap.get(currTE.exerciseId);
       const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
 
-      if (!isLastExercise) {
+      if (hasMoreMain) {
         nextExercise();
+      } else if (hasMoreDeferred) {
+        const [first, ...rest] = skippedIndices;
+        setPendingSkippedIndex(first);
+        setSkippedIndices(rest);
+        if (!isWorkingThroughSkipped) setIsWorkingThroughSkipped(true);
       } else {
         setCompletingAfterRest(true);
       }
@@ -671,7 +753,8 @@ export default function WorkoutActive() {
             {template.exercises.map((te, i) => {
               const ex = exerciseMap.get(te.exerciseId);
               const isCurrent = i === currentExerciseIndex;
-              const isDone = i < currentExerciseIndex;
+              const isSkipped = skippedIndices.includes(i);
+              const isDone = !isSkipped && i < currentExerciseIndex && !isSkipped;
               return (
                 <div
                   key={te.exerciseId + i}
@@ -712,10 +795,29 @@ export default function WorkoutActive() {
                       Now
                     </span>
                   )}
+                  {isSkipped && (
+                    <span
+                      className="font-body uppercase tracking-widest flex-shrink-0"
+                      style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)', border: '1px solid var(--color-border)', padding: '1px 5px', borderRadius: 'var(--radius-sm)' }}
+                    >
+                      Deferred
+                    </span>
+                  )}
                 </div>
               );
             })}
           </div>
+        </div>
+      )}
+
+      {isWorkingThroughSkipped && (
+        <div
+          className="flex items-center gap-2 px-4 py-2"
+          style={{ background: 'var(--color-surface-2)', borderBottom: 'var(--border-thin)' }}
+        >
+          <span className="font-body uppercase tracking-widest" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
+            Deferred exercise
+          </span>
         </div>
       )}
 
@@ -726,6 +828,7 @@ export default function WorkoutActive() {
         totalSets={currentTemplateExercise.sets}
         sessionId={sessionId ?? ''}
         onSetLogged={handleSetLogged}
+        onSkip={!currentTemplateExercise.isSuperset && !isWorkingThroughSkipped ? handleSkipExercise : undefined}
       />
     </div>
   );

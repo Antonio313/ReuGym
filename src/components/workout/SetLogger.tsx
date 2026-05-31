@@ -18,6 +18,7 @@ type Props = {
   totalSets: number;
   sessionId: string;
   onSetLogged: (set: ActiveSet, isPR: boolean) => void;
+  onSkip?: () => void;
 };
 
 
@@ -34,6 +35,7 @@ export function SetLogger({
   totalSets,
   sessionId,
   onSetLogged,
+  onSkip,
 }: Props) {
   const [weightStr, setWeightStr] = useState('');
   const [repsStr, setRepsStr] = useState('');
@@ -528,6 +530,24 @@ export function SetLogger({
         >
           Log Set
         </button>
+
+        {/* Skip — shown only when machine could be occupied */}
+        {onSkip && (
+          <button
+            type="button"
+            onClick={onSkip}
+            className="w-full py-3 font-body"
+            style={{
+              fontSize: 'var(--text-meta)',
+              color: 'var(--color-text-faint)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              background: 'transparent',
+            }}
+          >
+            Machine in use — skip for now
+          </button>
+        )}
       </div>
 
       {/* Fixed bottom numpad panel */}
