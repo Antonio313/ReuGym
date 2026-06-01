@@ -32,7 +32,7 @@ function exerciseToRow(exercise: Exercise, userId: string) {
     category:           exercise.category,
     type:               exercise.type,
     muscles:            exercise.muscles,
-    default_rep_range:  exercise.defaultRepRange ?? null,
+    default_rep_range:  exercise.defaultRepRange ?? [8, 12],
     starting_weight_kg: exercise.startingWeightKg ?? 0,
     rest_seconds:       exercise.restSeconds ?? 60,
     is_bodyweight:      exercise.isBodyweight ?? false,

@@ -94,20 +94,41 @@ function ToggleField({ label, checked, onChange }: { label: string; checked: boo
 
 function RestPresets({ value, onChange }: { value: number; onChange: (v: number) => void }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {REST_PRESETS.map(s => (
-        <button key={s} type="button" onClick={() => onChange(s)}
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-2">
+        {REST_PRESETS.map(s => (
+          <button key={s} type="button" onClick={() => onChange(s)}
+            className="font-mono" data-numeric
+            style={{
+              fontSize: 'var(--text-meta)', padding: '0.375rem 0.75rem',
+              borderRadius: 'var(--radius-sm)',
+              border: value === s ? '1px solid var(--color-accent)' : 'var(--border-thin)',
+              background: value === s ? 'var(--color-accent-dim)' : 'transparent',
+              color: value === s ? 'var(--color-accent)' : 'var(--color-text-muted)',
+            }}>
+            {s}s
+          </button>
+        ))}
+      </div>
+      <div className="flex items-center gap-2">
+        <input
+          type="number"
+          inputMode="numeric"
+          min={0}
+          value={value}
+          onChange={e => onChange(Math.max(0, parseInt(e.target.value) || 0))}
           className="font-mono" data-numeric
           style={{
-            fontSize: 'var(--text-meta)', padding: '0.375rem 0.75rem',
-            borderRadius: 'var(--radius-sm)',
-            border: value === s ? '1px solid var(--color-accent)' : 'var(--border-thin)',
-            background: value === s ? 'var(--color-accent-dim)' : 'transparent',
-            color: value === s ? 'var(--color-accent)' : 'var(--color-text-muted)',
-          }}>
-          {s}s
-        </button>
-      ))}
+            width: '5rem', padding: '0.375rem 0.625rem', textAlign: 'center',
+            fontSize: 'var(--text-body)', background: 'var(--color-surface-2)',
+            border: 'var(--border-thin)', borderRadius: 'var(--radius-md)',
+            color: 'var(--color-text)', outline: 'none',
+          }}
+        />
+        <span className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+          seconds{value === 0 ? ' (no rest)' : ''}
+        </span>
+      </div>
     </div>
   );
 }
