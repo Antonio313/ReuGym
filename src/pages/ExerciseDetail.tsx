@@ -305,7 +305,7 @@ export default function ExerciseDetail() {
   const allSets = data?.allSets ?? [];
   const sessions = data?.sessions ?? [];
   const bySession = data?.bySession ?? new Map<string, LoggedSet[]>();
-  const isBodyweight = exercise.isBodyweight;
+  const isBodyweight = exercise.isBodyweight ?? false;
 
   // PR across all history
   const prSet = isBodyweight ? topReps(allSets) : topSet(allSets);
@@ -383,7 +383,7 @@ export default function ExerciseDetail() {
               {exercise.isTimed ? 'Default seconds' : 'Default reps'}
             </p>
             <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-              {exercise.defaultRepRange[0]}–{exercise.defaultRepRange[1]}{exercise.isTimed ? 's' : ''}
+              {exercise.defaultRepRange?.[0] ?? '—'}–{exercise.defaultRepRange?.[1] ?? '—'}{exercise.isTimed ? 's' : ''}
             </p>
           </div>
           <div>

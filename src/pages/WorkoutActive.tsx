@@ -19,7 +19,7 @@ import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
-import type { ActiveSet, Exercise, ExercisePref } from '@/types';
+import type { ActiveSet, Exercise, ExercisePref, SubstituteConfig } from '@/types';
 
 type WorkoutPhase = 'preview' | 'pre-stretch' | 'workout' | 'post-stretch' | 'complete';
 
@@ -53,6 +53,10 @@ export default function WorkoutActive() {
   const [skippedIndices, setSkippedIndices] = useState<number[]>([]);
   const [isWorkingThroughSkipped, setIsWorkingThroughSkipped] = useState(false);
   const [pendingSkippedIndex, setPendingSkippedIndex] = useState<number | null>(null);
+
+  // Session-only substitute swaps: exerciseIndex → SubstituteConfig
+  const [sessionSwaps, setSessionSwaps] = useState<Map<number, SubstituteConfig>>(new Map());
+  const [swapSheetOpen, setSwapSheetOpen] = useState(false);
 
   const [liveTemplate] = useTemplate(templateId ?? '');
   const template = liveTemplate ?? (templateId ? defaultTemplateMap.get(templateId) : undefined);
@@ -186,6 +190,7 @@ export default function WorkoutActive() {
     setSkippedIndices([]);
     setIsWorkingThroughSkipped(false);
     setPendingSkippedIndex(null);
+    setSessionSwaps(new Map());
     setPhase(dayStretches.post.length > 0 ? 'post-stretch' : 'complete');
   };
 
@@ -270,15 +275,13 @@ export default function WorkoutActive() {
       const partnerName = exerciseMap.get(nextTE.exerciseId)?.name ?? '';
       const partnerEx = exerciseMap.get(nextTE.exerciseId);
       setRestLabel(`${partnerName} — Set ${currentSetNumber}`);
+      setRestNextExercise(partnerEx ?? null);
       if (partnerEx) {
-        const pref = prefsMap.get(partnerEx.id);
-        setRestNextExercise(partnerEx);
         setRestNextTarget({
-          weight: partnerEx.isBodyweight ? null : (pref?.startingWeightKg ?? partnerEx.startingWeightKg),
+          weight: nextTE.isBodyweight ? null : nextTE.startingWeightKg,
           reps: nextTE.repRange,
         });
       } else {
-        setRestNextExercise(null);
         setRestNextTarget(null);
       }
       setExerciseAndSet(currentExerciseIndex + 1, currentSetNumber);
@@ -294,40 +297,38 @@ export default function WorkoutActive() {
       if (!isLastSetOfPair) {
         const aName = exerciseMap.get(prevTE.exerciseId)?.name ?? '';
         setRestLabel(`Set ${currentSetNumber + 1} · ${aName} → ${exerciseMap.get(currTE.exerciseId)?.name ?? ''}`);
+        setRestNextExercise(partnerExerciseA ?? null);
         if (partnerExerciseA) {
-          const prefA = prefsMap.get(partnerExerciseA.id);
-          setRestNextExercise(partnerExerciseA);
           setRestNextTarget({
-            weight: partnerExerciseA.isBodyweight ? null : (prefA?.startingWeightKg ?? partnerExerciseA.startingWeightKg),
+            weight: prevTE.isBodyweight ? null : prevTE.startingWeightKg,
             reps: prevTE.repRange,
           });
         } else {
-          setRestNextExercise(null);
           setRestNextTarget(null);
         }
         setExerciseAndSet(currentExerciseIndex - 1, currentSetNumber + 1);
-        const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
+        const restSecs = currTE.restSeconds;
         startRestTimer(restSecs);
       } else {
         const queueEntries: FeelingEntry[] = [];
         const sid = sessionId ?? '';
         if (partnerExerciseA) {
-          const pref = prefsMap.get(partnerExerciseA.id);
+          const prefA = prefsMap.get(partnerExerciseA.id);
           queueEntries.push({
             exerciseId: partnerExerciseA.id,
             exercise: partnerExerciseA,
-            startingWeightKg: pref?.startingWeightKg ?? partnerExerciseA.startingWeightKg,
-            startingReps: pref?.startingReps ?? prevTE.repRange[0],
+            startingWeightKg: prevTE.startingWeightKg,
+            startingReps: prefA?.startingReps ?? prevTE.repRange[0],
             sessionId: sid,
           });
         }
         if (partnerExerciseB) {
-          const pref = prefsMap.get(partnerExerciseB.id);
+          const prefB = prefsMap.get(partnerExerciseB.id);
           queueEntries.push({
             exerciseId: partnerExerciseB.id,
             exercise: partnerExerciseB,
-            startingWeightKg: pref?.startingWeightKg ?? partnerExerciseB.startingWeightKg,
-            startingReps: pref?.startingReps ?? currTE.repRange[0],
+            startingWeightKg: currTE.startingWeightKg,
+            startingReps: prefB?.startingReps ?? currTE.repRange[0],
             sessionId: sid,
           });
         }
@@ -340,31 +341,28 @@ export default function WorkoutActive() {
           const nextEx = exerciseMap.get(nextNonSupersetEx.exerciseId);
           const nextName = nextEx?.name ?? '';
           setRestLabel(`Next: ${nextName}`);
+          setRestNextExercise(nextEx ?? null);
           if (nextEx) {
-            const pref = prefsMap.get(nextEx.id);
-            setRestNextExercise(nextEx);
             setRestNextTarget({
-              weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+              weight: nextNonSupersetEx.isBodyweight ? null : nextNonSupersetEx.startingWeightKg,
               reps: nextNonSupersetEx.repRange,
             });
           } else {
-            setRestNextExercise(null);
             setRestNextTarget(null);
           }
           nextExercise();
         } else if (hasMoreDeferred) {
           const [first, ...rest] = skippedIndices;
-          const nextEx = exerciseMap.get(template.exercises[first].exerciseId);
+          const firstSkippedTE = template.exercises[first];
+          const nextEx = exerciseMap.get(firstSkippedTE.exerciseId);
           setRestLabel(`Next: ${nextEx?.name ?? ''} (deferred)`);
+          setRestNextExercise(nextEx ?? null);
           if (nextEx) {
-            const pref = prefsMap.get(nextEx.id);
-            setRestNextExercise(nextEx);
             setRestNextTarget({
-              weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
-              reps: template.exercises[first].repRange,
+              weight: firstSkippedTE.isBodyweight ? null : firstSkippedTE.startingWeightKg,
+              reps: firstSkippedTE.repRange,
             });
           } else {
-            setRestNextExercise(null);
             setRestNextTarget(null);
           }
           setPendingSkippedIndex(first);
@@ -376,7 +374,7 @@ export default function WorkoutActive() {
           setCompletingAfterRest(true);
         }
 
-        const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
+        const restSecs = currTE.restSeconds;
         if (queueEntries.length > 0) {
           setFeelingQueue(queueEntries);
           pendingRestRef.current = restSecs;
@@ -409,43 +407,37 @@ export default function WorkoutActive() {
     // Set next exercise info for rest screen
     if (!isLastSet) {
       const currEx = exerciseMap.get(currTE.exerciseId);
+      setRestNextExercise(currEx ?? null);
       if (currEx) {
-        const pref = prefsMap.get(currEx.id);
-        setRestNextExercise(currEx);
         setRestNextTarget({
-          weight: currEx.isBodyweight ? null : (pref?.startingWeightKg ?? currEx.startingWeightKg),
+          weight: currTE.isBodyweight ? null : currTE.startingWeightKg,
           reps: currTE.repRange,
         });
       } else {
-        setRestNextExercise(null);
         setRestNextTarget(null);
       }
     } else if (hasMoreMain) {
       const nextTeEntry = template.exercises[currentExerciseIndex + 1];
       const nextEx = exerciseMap.get(nextTeEntry.exerciseId);
+      setRestNextExercise(nextEx ?? null);
       if (nextEx) {
-        const pref = prefsMap.get(nextEx.id);
-        setRestNextExercise(nextEx);
         setRestNextTarget({
-          weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+          weight: nextTeEntry.isBodyweight ? null : nextTeEntry.startingWeightKg,
           reps: nextTeEntry.repRange,
         });
       } else {
-        setRestNextExercise(null);
         setRestNextTarget(null);
       }
     } else if (hasMoreDeferred) {
       const nextSkippedTE = template.exercises[skippedIndices[0]];
       const nextEx = exerciseMap.get(nextSkippedTE.exerciseId);
+      setRestNextExercise(nextEx ?? null);
       if (nextEx) {
-        const pref = prefsMap.get(nextEx.id);
-        setRestNextExercise(nextEx);
         setRestNextTarget({
-          weight: nextEx.isBodyweight ? null : (pref?.startingWeightKg ?? nextEx.startingWeightKg),
+          weight: nextSkippedTE.isBodyweight ? null : nextSkippedTE.startingWeightKg,
           reps: nextSkippedTE.repRange,
         });
       } else {
-        setRestNextExercise(null);
         setRestNextTarget(null);
       }
     } else {
@@ -455,10 +447,10 @@ export default function WorkoutActive() {
 
     if (!isLastSet) {
       incrementSetNumber();
-      startRestTimer(getRestSecondsForExercise(currTE.exerciseId, exerciseMap));
+      startRestTimer(currTE.restSeconds);
     } else {
       const exercise = exerciseMap.get(currTE.exerciseId) ?? staticExerciseMap.get(currTE.exerciseId);
-      const restSecs = getRestSecondsForExercise(currTE.exerciseId, exerciseMap);
+      const restSecs = currTE.restSeconds;
 
       if (hasMoreMain) {
         nextExercise();
@@ -476,7 +468,7 @@ export default function WorkoutActive() {
         setFeelingQueue([{
           exerciseId: exercise.id,
           exercise,
-          startingWeightKg: pref?.startingWeightKg ?? exercise.startingWeightKg,
+          startingWeightKg: currTE.startingWeightKg,
           startingReps: pref?.startingReps ?? currTE.repRange[0],
           sessionId: sessionId ?? '',
         }]);
@@ -547,12 +539,12 @@ export default function WorkoutActive() {
     return (
       <StretchStep
         stretch={stretchEx}
-        restSeconds={assignment.restSeconds}
+        assignment={assignment}
         index={stretchIndex}
         total={list.length}
         phase="pre"
         nextStretch={nextStretchEx}
-        nextRestSeconds={nextAssignment?.restSeconds}
+        nextAssignment={nextAssignment}
         onNext={handleStretchNext}
       />
     );
@@ -569,12 +561,12 @@ export default function WorkoutActive() {
     return (
       <StretchStep
         stretch={stretchEx}
-        restSeconds={assignment.restSeconds}
+        assignment={assignment}
         index={stretchIndex}
         total={list.length}
         phase="post"
         nextStretch={nextStretchEx}
-        nextRestSeconds={nextAssignment?.restSeconds}
+        nextAssignment={nextAssignment}
         onNext={handleStretchNext}
       />
     );
@@ -629,6 +621,14 @@ export default function WorkoutActive() {
 
   const currentTemplateExercise = template.exercises[currentExerciseIndex];
   const currentExercise = exerciseMap.get(currentTemplateExercise?.exerciseId ?? '');
+
+  const activeSwap = sessionSwaps.get(currentExerciseIndex);
+  const effectiveTE = activeSwap
+    ? { ...currentTemplateExercise, ...activeSwap, isBodyweight: currentTemplateExercise.isBodyweight, isTimed: currentTemplateExercise.isTimed }
+    : currentTemplateExercise;
+  const effectiveExercise = activeSwap
+    ? (exerciseMap.get(activeSwap.exerciseId) ?? currentExercise)
+    : currentExercise;
 
   if (!currentExercise) {
     return (
@@ -707,6 +707,15 @@ export default function WorkoutActive() {
               <span className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
                 {currentExerciseIndex + 1}/{template.exercises.length}
               </span>
+              {(currentTemplateExercise.substitutes?.length ?? 0) > 0 && (
+                <button
+                  onClick={() => setSwapSheetOpen(true)}
+                  className="font-body"
+                  style={{ fontSize: 'var(--text-meta)', color: activeSwap ? 'var(--color-accent)' : 'var(--color-text-muted)' }}
+                >
+                  {activeSwap ? 'Swapped' : 'Swap'}
+                </button>
+              )}
               <button
                 onClick={() => setShowUpcoming(true)}
                 className="font-body"
@@ -780,7 +789,7 @@ export default function WorkoutActive() {
                       data-numeric
                       style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
                     >
-                      {te.sets} × {formatRepRange(te.repRange[0], te.repRange[1], ex?.isTimed)}
+                      {te.sets} × {formatRepRange(te.repRange[0], te.repRange[1], te.isTimed)}
                     </p>
                   </div>
                   {isCurrent && (
@@ -817,15 +826,70 @@ export default function WorkoutActive() {
         </div>
       )}
 
+      {activeSwap && (
+        <button
+          onClick={() => setSessionSwaps(m => { const next = new Map(m); next.delete(currentExerciseIndex); return next; })}
+          className="font-body px-4 py-1"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)', borderBottom: 'var(--border-thin)', width: '100%', textAlign: 'left' }}
+        >
+          ↩ Undo swap — back to {exerciseMap.get(currentTemplateExercise.exerciseId)?.name ?? currentTemplateExercise.exerciseId}
+        </button>
+      )}
+
       <SetLogger
-        templateExercise={currentTemplateExercise}
-        exercise={currentExercise}
+        templateExercise={effectiveTE}
+        exercise={effectiveExercise ?? currentExercise}
         setNumber={currentSetNumber}
         totalSets={currentTemplateExercise.sets}
         sessionId={sessionId ?? ''}
         onSetLogged={handleSetLogged}
         onSkip={!currentTemplateExercise.isSuperset && !isWorkingThroughSkipped ? handleSkipExercise : undefined}
       />
+
+      {swapSheetOpen && (
+        <>
+          <div className="fixed inset-0 z-40" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={() => setSwapSheetOpen(false)} />
+          <div className="fixed bottom-0 left-0 right-0 z-50 mx-auto flex flex-col"
+            style={{ maxWidth: 'var(--max-content-width)', background: 'var(--color-surface)', borderRadius: '6px 6px 0 0' }}>
+            <div className="flex items-center justify-between px-4 py-3"
+              style={{ borderBottom: 'var(--border-thin)' }}>
+              <p className="font-body font-medium" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+                Substitutes
+              </p>
+              <button onClick={() => setSwapSheetOpen(false)} style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-h2)', lineHeight: 1 }}>✕</button>
+            </div>
+            <div className="px-4 py-3 flex flex-col gap-2 pb-8">
+              {currentTemplateExercise.substitutes?.map((sub) => {
+                const subEx = exerciseMap.get(sub.exerciseId);
+                const isActive = activeSwap?.exerciseId === sub.exerciseId;
+                return (
+                  <button
+                    key={sub.exerciseId}
+                    onClick={() => { setSessionSwaps(m => new Map(m).set(currentExerciseIndex, sub)); setSwapSheetOpen(false); }}
+                    className="flex items-start gap-3 p-3 text-left w-full"
+                    style={{
+                      background: isActive ? 'var(--color-accent-dim)' : 'var(--color-surface-2)',
+                      border: isActive ? '1px solid var(--color-accent)' : 'var(--border-thin)',
+                      borderRadius: 'var(--radius-md)',
+                    }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="font-body" style={{ fontSize: 'var(--text-body)', color: isActive ? 'var(--color-accent)' : 'var(--color-text)' }}>
+                        {subEx?.name ?? sub.exerciseId}
+                      </p>
+                      <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
+                        {sub.sets}×{formatRepRange(sub.repRange[0], sub.repRange[1])}
+                        {' · '}{sub.startingWeightKg > 0 ? `${sub.startingWeightKg}kg` : 'BW'}
+                        {' · '}{sub.restSeconds}s
+                      </p>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -835,11 +899,4 @@ export default function WorkoutActive() {
 function formatRepRange(min: number, max: number, isTimed = false): string {
   const unit = isTimed ? 's' : ' reps';
   return min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
-}
-
-function getRestSecondsForExercise(
-  exerciseId: string,
-  exerciseMap: Map<string, Exercise>,
-): number {
-  return exerciseMap.get(exerciseId)?.restSeconds ?? staticExerciseMap.get(exerciseId)?.restSeconds ?? 60;
 }

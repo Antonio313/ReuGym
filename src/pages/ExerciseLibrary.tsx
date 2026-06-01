@@ -26,7 +26,7 @@ type Tab = 'exercises' | 'stretches';
 
 export default function ExerciseLibrary() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') === 'stretches' ? 'stretches' : 'exercises';
 
   const [tab, setTab] = useState<Tab>(initialTab);
@@ -79,7 +79,11 @@ export default function ExerciseLibrary() {
         {(['exercises', 'stretches'] as Tab[]).map((t) => (
           <button
             key={t}
-            onClick={() => { setTab(t); setQuery(''); }}
+            onClick={() => {
+              setTab(t);
+              setQuery('');
+              setSearchParams(t === 'stretches' ? { tab: 'stretches' } : {}, { replace: true });
+            }}
             className="flex-1 py-3 font-body uppercase tracking-widest"
             style={{
               fontSize: 'var(--text-micro)',
@@ -145,10 +149,10 @@ export default function ExerciseLibrary() {
                   </span>
                   <span className="flex flex-col items-end" style={{ flexShrink: 0, marginLeft: '0.5rem' }}>
                     <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-                      {formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed)}
+                      {ex.defaultRepRange ? formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed) : ''}
                     </span>
                     <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
-                      {weightLabel(ex.startingWeightKg, ex.isBodyweight)}
+                      {weightLabel(ex.startingWeightKg ?? 0, ex.isBodyweight ?? false)}
                     </span>
                   </span>
                 </button>
@@ -193,7 +197,7 @@ export default function ExerciseLibrary() {
                         </span>
                       </span>
                       <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', flexShrink: 0, marginLeft: '0.5rem' }}>
-                        {formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed)}
+                        {ex.defaultRepRange ? formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed) : ''}
                       </span>
                     </button>
                   ))}
@@ -218,7 +222,7 @@ export default function ExerciseLibrary() {
             </div>
           ) : isSearching ? (
             filteredStretches.map((s) => {
-              const repsDisplay = formatRepRange(s.defaultRepRange[0], s.defaultRepRange[1], s.isTimed);
+              const repsDisplay = s.defaultRepRange ? formatRepRange(s.defaultRepRange[0], s.defaultRepRange[1], s.isTimed) : '';
               return (
                 <button
                   key={s.id}
@@ -231,7 +235,7 @@ export default function ExerciseLibrary() {
                       {s.name}
                     </span>
                     <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
-                      {repsDisplay}{s.restSeconds > 0 ? ` · ${s.restSeconds}s rest` : ''}{s.notes ? ` · ${s.notes}` : ''}
+                      {repsDisplay}{(s.restSeconds ?? 0) > 0 ? ` · ${s.restSeconds}s rest` : ''}{s.notes ? ` · ${s.notes}` : ''}
                     </span>
                   </span>
                   <span style={{ color: 'var(--color-text-faint)', fontSize: 'var(--text-meta)', marginLeft: '0.5rem' }}>Edit</span>
@@ -261,7 +265,7 @@ export default function ExerciseLibrary() {
                     </span>
                   </p>
                   {catStretches.map((s) => {
-                    const repsDisplay = formatRepRange(s.defaultRepRange[0], s.defaultRepRange[1], s.isTimed);
+                    const repsDisplay = s.defaultRepRange ? formatRepRange(s.defaultRepRange[0], s.defaultRepRange[1], s.isTimed) : '';
                     return (
                       <button
                         key={s.id}

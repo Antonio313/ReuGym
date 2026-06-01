@@ -70,7 +70,7 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
             {dayStretches.pre.map((s, i) => {
               const ex = stretchExMap.get(s.exerciseId);
               if (!ex) return null;
-              const repsDisplay = formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed);
+              const repsDisplay = formatRepRange(s.repRange[0], s.repRange[1], s.isTimed);
               return (
                 <div
                   key={s.id}
@@ -151,7 +151,7 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
             {dayStretches.post.map((s, i) => {
               const ex = stretchExMap.get(s.exerciseId);
               if (!ex) return null;
-              const repsDisplay = formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed);
+              const repsDisplay = formatRepRange(s.repRange[0], s.repRange[1], s.isTimed);
               return (
                 <div
                   key={s.id}

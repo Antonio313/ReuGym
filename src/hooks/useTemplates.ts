@@ -3,17 +3,22 @@ import { nanoid } from 'nanoid';
 import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
 import { templates as staticTemplates, templateMap as defaultTemplateMap } from '@/data/templates';
-import type { WorkoutTemplate, TemplateExercise } from '@/types';
+import type { WorkoutTemplate, TemplateExercise, SubstituteConfig } from '@/types';
 
 export { staticTemplates as defaultTemplates };
 
 function rowToTemplateExercise(row: Record<string, unknown>): TemplateExercise {
   return {
-    exerciseId:       row.exercise_id as string,
-    sets:             row.sets as number,
-    repRange:         [row.rep_range_min as number, row.rep_range_max as number],
-    isSuperset:       row.is_superset as boolean,
-    supersetGroupId:  row.superset_group_id as string | undefined,
+    exerciseId:        row.exercise_id as string,
+    sets:              row.sets as number,
+    repRange:          [row.rep_range_min as number, row.rep_range_max as number],
+    startingWeightKg:  row.starting_weight_kg as number ?? 0,
+    restSeconds:       row.rest_seconds as number ?? 60,
+    isBodyweight:      row.is_bodyweight as boolean ?? false,
+    isTimed:           row.is_timed as boolean ?? false,
+    isSuperset:        row.is_superset as boolean,
+    supersetGroupId:   row.superset_group_id as string | undefined,
+    substitutes:       (row.substitutes as SubstituteConfig[] | null) ?? [],
   };
 }
 
@@ -57,16 +62,21 @@ export async function saveTemplate(template: WorkoutTemplate): Promise<void> {
   if (template.exercises.length > 0) {
     await supabase.from('template_exercises').insert(
       template.exercises.map((te, i) => ({
-        id:                nanoid(),
-        user_id:           user.id,
-        template_id:       template.id,
-        exercise_id:       te.exerciseId,
-        position:          i,
-        sets:              te.sets,
-        rep_range_min:     te.repRange[0],
-        rep_range_max:     te.repRange[1],
-        is_superset:       te.isSuperset,
-        superset_group_id: te.supersetGroupId ?? null,
+        id:                 nanoid(),
+        user_id:            user.id,
+        template_id:        template.id,
+        exercise_id:        te.exerciseId,
+        position:           i,
+        sets:               te.sets,
+        rep_range_min:      te.repRange[0],
+        rep_range_max:      te.repRange[1],
+        starting_weight_kg: te.startingWeightKg,
+        rest_seconds:       te.restSeconds,
+        is_bodyweight:      te.isBodyweight,
+        is_timed:           te.isTimed,
+        is_superset:        te.isSuperset,
+        superset_group_id:  te.supersetGroupId ?? null,
+        substitutes:        te.substitutes ?? [],
       })),
     );
   }

@@ -1,0 +1,11 @@
+export const DUMBBELL_WEIGHTS = [
+  8, 9, 10, 12.5, 15, 17.5, 20, 22.5, 25, 27.5, 30, 32.5, 35,
+  37.5, 40, 42.5, 45, 47.5, 50,
+];
+
+export function snapToNearestDumbbell(weight: number): number {
+  if (weight <= 0) return 0;
+  return DUMBBELL_WEIGHTS.reduce((a, b) =>
+    Math.abs(b - weight) < Math.abs(a - weight) ? b : a,
+  );
+}

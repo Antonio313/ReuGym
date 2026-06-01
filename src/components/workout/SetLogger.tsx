@@ -9,6 +9,7 @@ import { haptics } from '@/lib/haptics';
 import { playSetLogged } from '@/lib/audio';
 import { NumericKeypad } from '@/components/shared/NumericKeypad';
 import { VideoReference } from '@/components/workout/VideoReference';
+import { snapToNearestDumbbell } from '@/lib/weights';
 import type { TemplateExercise, Exercise, ActiveSet } from '@/types';
 
 type Props = {
@@ -40,8 +41,8 @@ export function SetLogger({
   const [weightStr, setWeightStr] = useState('');
   const [repsStr, setRepsStr] = useState('');
   const [activeField, setActiveField] = useState<'weight' | 'reps' | null>(null);
-  const rirOptions = exercise.isTimed ? [0, 5, 10, 15, 20, 30] : [0, 1, 2, 3, 4, 5];
-  const [rir, setRir] = useState(() => exercise.isTimed ? 10 : 2);
+  const rirOptions = templateExercise.isTimed ? [0, 5, 10, 15, 20, 30] : [0, 1, 2, 3, 4, 5];
+  const [rir, setRir] = useState(() => templateExercise.isTimed ? 10 : 2);
   const [isWarmup, setIsWarmup] = useState(false);
   const [justLoggedPR, setJustLoggedPR] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -70,11 +71,12 @@ export function SetLogger({
     }
   }, [exercise.id, setNumber]);
 
-  // Default weight: lastData → exercisePref → exercise.startingWeightKg
-  const defaultWeightKg =
+  // Default weight: lastData → exercisePref → templateExercise.startingWeightKg → snap to dumbbell
+  const defaultWeightKg = snapToNearestDumbbell(
     lastData?.weightKg != null
       ? lastData.weightKg
-      : (exercisePref?.startingWeightKg ?? exercise.startingWeightKg);
+      : (exercisePref?.startingWeightKg ?? templateExercise.startingWeightKg),
+  );
 
   // Default reps: lastData → pref startingReps → lower bound of rep range
   const defaultReps =
@@ -83,7 +85,7 @@ export function SetLogger({
       : (exercisePref?.startingReps ?? templateExercise.repRange[0]);
 
   const resolvedWeight = weightStr !== '' ? parseFloat(weightStr) : defaultWeightKg;
-  const resolvedReps = exercise.isTimed
+  const resolvedReps = templateExercise.isTimed
     ? (timerLocked ?? defaultReps)
     : (repsStr !== '' ? parseInt(repsStr, 10) : defaultReps);
 
@@ -120,15 +122,15 @@ export function SetLogger({
     const weight = resolvedWeight;
     const reps = resolvedReps;
 
-    if (!isWarmup && weight <= 0 && !exercise.isBodyweight) {
+    if (!isWarmup && weight <= 0 && !templateExercise.isBodyweight) {
       setError('Enter a weight');
       return;
     }
-    if (exercise.isTimed && timerLocked === null) {
+    if (templateExercise.isTimed && timerLocked === null) {
       setError('Start and stop the timer first');
       return;
     }
-    if (!exercise.isTimed && reps <= 0) {
+    if (!templateExercise.isTimed && reps <= 0) {
       setError('Enter reps');
       return;
     }
@@ -141,7 +143,7 @@ export function SetLogger({
       sessionId,
       exerciseId: exercise.id,
       setNumber,
-      weightKg: exercise.isBodyweight ? 0 : weight,
+      weightKg: templateExercise.isBodyweight ? 0 : weight,
       reps,
       rir,
       isWarmup,
@@ -225,7 +227,7 @@ export function SetLogger({
                   Superset
                 </span>
               )}
-              {exercise.isBodyweight && (
+              {templateExercise.isBodyweight && (
                 <span
                   className="font-body uppercase tracking-widest"
                   style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
@@ -233,7 +235,7 @@ export function SetLogger({
                   Bodyweight
                 </span>
               )}
-              {exercise.isTimed && (
+              {templateExercise.isTimed && (
                 <span
                   className="font-body uppercase tracking-widest"
                   style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
@@ -289,7 +291,7 @@ export function SetLogger({
         </div>
 
         {/* Weight field (hidden for pure bodyweight exercises) */}
-        {!exercise.isBodyweight && (
+        {!templateExercise.isBodyweight && (
           <div className="flex gap-3">
             <button
               type="button"
@@ -322,7 +324,7 @@ export function SetLogger({
         )}
 
         {/* Timed exercise — count-up timer */}
-        {exercise.isTimed ? (
+        {templateExercise.isTimed ? (
           <div
             className="flex flex-col items-center gap-4 py-5"
             style={{
@@ -441,7 +443,7 @@ export function SetLogger({
         {/* RIR selector */}
         <div>
           <p className="font-body mb-2" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-            {exercise.isTimed ? 'SIR' : 'RIR'}
+            {templateExercise.isTimed ? 'SIR' : 'RIR'}
           </p>
           <div className="flex gap-2">
             {rirOptions.map((r) => (

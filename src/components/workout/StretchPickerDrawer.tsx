@@ -58,7 +58,6 @@ export function StretchPickerDrawer({ open, onClose, onSelect, excludeIds = [] }
             placeholder="Search stretches…"
             className="w-full px-3 py-2 rounded-md font-body"
             style={{ background: 'var(--color-surface-2)', border: 'var(--border-thin)', color: 'var(--color-text)', fontSize: 'var(--text-body)', outline: 'none' }}
-            autoFocus
           />
         </div>
 
@@ -108,9 +107,10 @@ export function StretchPickerDrawer({ open, onClose, onSelect, excludeIds = [] }
 }
 
 function StretchRow({ stretch, already, onSelect }: { stretch: Exercise; already: boolean; onSelect: () => void }) {
-  const repsDisplay = stretch.isTimed
-    ? `${stretch.defaultRepRange[0]}–${stretch.defaultRepRange[1]}s`
-    : `${stretch.defaultRepRange[0]}–${stretch.defaultRepRange[1]} reps`;
+  const dr = stretch.defaultRepRange;
+  const repsDisplay = dr
+    ? (stretch.isTimed ? `${dr[0]}–${dr[1]}s` : `${dr[0]}–${dr[1]} reps`)
+    : '';
 
   return (
     <button
@@ -123,7 +123,7 @@ function StretchRow({ stretch, already, onSelect }: { stretch: Exercise; already
         <p className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>{stretch.name}</p>
         <p className="font-body mt-0.5" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
           {repsDisplay}
-          {stretch.restSeconds > 0 && ` · ${stretch.restSeconds}s rest`}
+          {(stretch.restSeconds ?? 0) > 0 && ` · ${stretch.restSeconds}s rest`}
         </p>
       </div>
       {already ? (

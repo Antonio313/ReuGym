@@ -26,26 +26,31 @@ function rowToExercise(row: Record<string, unknown>): Exercise {
 
 function exerciseToRow(exercise: Exercise, userId: string) {
   return {
-    id:                exercise.id,
-    user_id:           userId,
-    name:              exercise.name,
-    category:          exercise.category,
-    type:              exercise.type,
-    muscles:           exercise.muscles,
-    default_rep_range: exercise.defaultRepRange,
-    starting_weight_kg: exercise.startingWeightKg,
-    rest_seconds:      exercise.restSeconds,
-    is_bodyweight:     exercise.isBodyweight,
-    is_cable:          exercise.isCable ?? false,
-    is_timed:          exercise.isTimed ?? false,
-    is_stretch:        exercise.isStretch ?? false,
-    video_url:         exercise.videoUrl ?? null,
-    notes:             exercise.notes ?? null,
+    id:                 exercise.id,
+    user_id:            userId,
+    name:               exercise.name,
+    category:           exercise.category,
+    type:               exercise.type,
+    muscles:            exercise.muscles,
+    default_rep_range:  exercise.defaultRepRange ?? null,
+    starting_weight_kg: exercise.startingWeightKg ?? 0,
+    rest_seconds:       exercise.restSeconds ?? 60,
+    is_bodyweight:      exercise.isBodyweight ?? false,
+    is_cable:           exercise.isCable ?? false,
+    is_timed:           exercise.isTimed ?? false,
+    is_stretch:         exercise.isStretch ?? false,
+    video_url:          exercise.videoUrl ?? null,
+    notes:              exercise.notes ?? null,
   };
 }
 
+// Module-level caches survive component unmount/remount, eliminating
+// the flash where the list briefly reverts to static-only on navigation.
+let _exercisesCache: Exercise[] | null = null;
+let _stretchesCache: Exercise[] | null = null;
+
 export function useExercises(): Exercise[] {
-  const [custom, setCustom] = useState<Exercise[]>([]);
+  const [custom, setCustom] = useState<Exercise[]>(_exercisesCache ?? []);
 
   const load = useCallback(async () => {
     const user = getLocalSession();
@@ -54,8 +59,13 @@ export function useExercises(): Exercise[] {
       .from('custom_exercises')
       .select('*')
       .eq('user_id', user.id)
-      .eq('is_stretch', false);
-    if (data) setCustom(data.map(rowToExercise));
+      .eq('is_stretch', false)
+      .order('name', { ascending: true });
+    if (data) {
+      const mapped = data.map(rowToExercise);
+      _exercisesCache = mapped;
+      setCustom(mapped);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);
@@ -65,7 +75,7 @@ export function useExercises(): Exercise[] {
 }
 
 export function useStretches(): Exercise[] {
-  const [custom, setCustom] = useState<Exercise[]>([]);
+  const [custom, setCustom] = useState<Exercise[]>(_stretchesCache ?? []);
 
   const load = useCallback(async () => {
     const user = getLocalSession();
@@ -74,8 +84,13 @@ export function useStretches(): Exercise[] {
       .from('custom_exercises')
       .select('*')
       .eq('user_id', user.id)
-      .eq('is_stretch', true);
-    if (data) setCustom(data.map(rowToExercise));
+      .eq('is_stretch', true)
+      .order('name', { ascending: true });
+    if (data) {
+      const mapped = data.map(rowToExercise);
+      _stretchesCache = mapped;
+      setCustom(mapped);
+    }
   }, []);
 
   useEffect(() => { void load(); }, [load]);

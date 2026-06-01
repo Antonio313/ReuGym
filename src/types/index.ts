@@ -14,10 +14,11 @@ export type Exercise = {
   category: ExerciseCategory;
   type: ExerciseType;
   muscles: MuscleGroup[];
-  defaultRepRange: [number, number];
-  startingWeightKg: number;
-  restSeconds: number;
-  isBodyweight: boolean;
+  // Optional — serve as defaults when adding to a template; no longer collected by CreateExercise
+  defaultRepRange?: [number, number];
+  startingWeightKg?: number;
+  restSeconds?: number;
+  isBodyweight?: boolean;
   isCable?: boolean;
   isTimed?: boolean;
   isStretch?: boolean;
@@ -27,12 +28,25 @@ export type Exercise = {
 
 // ─── Workout Templates ───────────────────────────────────────────
 
+export type SubstituteConfig = {
+  exerciseId: string;
+  sets: number;
+  repRange: [number, number];
+  startingWeightKg: number;
+  restSeconds: number;
+};
+
 export type TemplateExercise = {
   exerciseId: string;
   sets: number;
   repRange: [number, number];
+  startingWeightKg: number;
+  restSeconds: number;
+  isBodyweight: boolean;
+  isTimed: boolean;
   isSuperset: boolean;
   supersetGroupId?: string;
+  substitutes?: SubstituteConfig[];
 };
 
 export type WorkoutTemplate = {
@@ -46,9 +60,14 @@ export type WorkoutTemplate = {
 // ─── Stretch assignment (references an Exercise with isStretch:true) ─
 
 export type DayStretch = {
-  id: string;          // assignment nanoid
+  id: string;               // assignment nanoid
   exerciseId: string;
+  sets: number;
+  repRange: [number, number];
+  startingWeightKg: number;
   restSeconds: number;
+  isBodyweight: boolean;
+  isTimed: boolean;
 };
 
 // ─── Database Types ──────────────────────────────────────────────

@@ -39,6 +39,7 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, retu
     <Drawer open={open} onClose={onClose}>
       <DrawerContent
         style={{ background: 'var(--color-surface)', maxHeight: '85dvh' }}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <DrawerHeader className="px-4 pt-4 pb-2">
           <DrawerTitle
@@ -107,8 +108,8 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, retu
                           className="font-mono"
                           style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
                         >
-                          {ex.defaultRepRange[0]}–{ex.defaultRepRange[1]} reps
-                          {ex.isBodyweight ? ' · Bodyweight' : ` · ${ex.startingWeightKg}kg start`}
+                          {ex.defaultRepRange ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps` : ''}
+                          {ex.isBodyweight ? ' · Bodyweight' : ex.startingWeightKg ? ` · ${ex.startingWeightKg}kg start` : ''}
                           {ex.notes ? ` · ${ex.notes}` : ''}
                         </span>
                       </span>

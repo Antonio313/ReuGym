@@ -104,13 +104,16 @@ function DayCard({ template, lastSessionDate }: DayCardProps) {
   );
 }
 
+// Module-level cache so "last session" dates appear instantly on revisit.
+let _lastSessionsCache: Record<string, number> | null = null;
+
 export default function Home() {
   const isSunday = new Date().getDay() === 0;
   const navigate = useNavigate();
 
   const templates = useTemplates();
   const [aiOpen, setAiOpen] = useState(false);
-  const [lastSessions, setLastSessions] = useState<Record<string, number>>({});
+  const [lastSessions, setLastSessions] = useState<Record<string, number>>(_lastSessionsCache ?? {});
 
   useEffect(() => {
     const user = getLocalSession();
@@ -127,6 +130,7 @@ export default function Home() {
           const tId = row.template_id as string;
           if (!results[tId]) results[tId] = row.completed_at as number;
         }
+        _lastSessionsCache = results;
         setLastSessions(results);
       });
   }, []);
