@@ -44,6 +44,7 @@ export default function WorkoutActive() {
   const [feelingQueue, setFeelingQueue] = useState<FeelingEntry[]>([]);
   const [completionStats, setCompletionStats] = useState<CompletionStats | null>(null);
   const [showUpcoming, setShowUpcoming] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
   const [restNextExercise, setRestNextExercise] = useState<Exercise | null>(null);
   const [restNextTarget, setRestNextTarget] = useState<{ weight: number | null; reps: [number, number] } | null>(null);
   // pendingRest holds the seconds to start after feeling queue drains
@@ -165,10 +166,11 @@ export default function WorkoutActive() {
 
     const user = getLocalSession();
     if (sessionId && user) {
-      await supabase
+      const { error: updateError } = await supabase
         .from('workout_sessions')
         .update({ completed_at: completedAt, duration_seconds: durationSeconds })
         .eq('id', sessionId);
+      if (updateError) console.error('Failed to complete session:', updateError.message);
       const { data: setsData } = await supabase
         .from('logged_sets')
         .select('*')
@@ -200,9 +202,13 @@ export default function WorkoutActive() {
     const now = Date.now();
     const user = getLocalSession();
     if (user) {
-      await supabase.from('workout_sessions').insert({
+      const { error: insertError } = await supabase.from('workout_sessions').insert({
         id, user_id: user.id, template_id: template.id, started_at: now,
       });
+      if (insertError) {
+        setSessionError(`Could not start session: ${insertError.message}`);
+        return;
+      }
     }
     startSession(template, id, now);
     enableWakeLock();
@@ -516,15 +522,33 @@ export default function WorkoutActive() {
   // ── Preview phase ──────────────────────────────────────────────
   if (phase === 'preview') {
     return (
-      <WorkoutPreview
-        template={template}
-        exerciseMap={exerciseMap}
-        dayStretches={dayStretches}
-        stretchExMap={stretchExMap}
-        prefsMap={prefsMap}
-        onBegin={handleStartWorkout}
-        onBack={() => navigate(-1)}
-      />
+      <>
+        <WorkoutPreview
+          template={template}
+          exerciseMap={exerciseMap}
+          dayStretches={dayStretches}
+          stretchExMap={stretchExMap}
+          prefsMap={prefsMap}
+          onBegin={handleStartWorkout}
+          onBack={() => navigate(-1)}
+        />
+        {sessionError && (
+          <div
+            className="fixed bottom-4 left-4 right-4 mx-auto px-4 py-3 font-body"
+            style={{
+              maxWidth: 'var(--max-content-width)',
+              background: 'var(--color-surface)',
+              border: '1px solid var(--color-regression)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-regression)',
+              fontSize: 'var(--text-meta)',
+              zIndex: 50,
+            }}
+          >
+            {sessionError}
+          </div>
+        )}
+      </>
     );
   }
 

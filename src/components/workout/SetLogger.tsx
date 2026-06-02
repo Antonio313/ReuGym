@@ -71,18 +71,19 @@ export function SetLogger({
     }
   }, [exercise.id, setNumber]);
 
-  // Default weight: lastData → exercisePref → templateExercise.startingWeightKg → snap to dumbbell
+  // Default weight: lastData → max(pref, template) → snap to dumbbell
+  // Using max ensures template config acts as a floor; prefs only override upward.
   const defaultWeightKg = snapToNearestDumbbell(
     lastData?.weightKg != null
       ? lastData.weightKg
-      : (exercisePref?.startingWeightKg ?? templateExercise.startingWeightKg),
+      : Math.max(exercisePref?.startingWeightKg ?? 0, templateExercise.startingWeightKg),
   );
 
-  // Default reps: lastData → pref startingReps → lower bound of rep range
+  // Default reps: lastData → max(pref, template lower bound)
   const defaultReps =
     lastData?.reps != null
       ? lastData.reps
-      : (exercisePref?.startingReps ?? templateExercise.repRange[0]);
+      : Math.max(exercisePref?.startingReps ?? 0, templateExercise.repRange[0]);
 
   const resolvedWeight = weightStr !== '' ? parseFloat(weightStr) : defaultWeightKg;
   const resolvedReps = templateExercise.isTimed
@@ -153,7 +154,7 @@ export function SetLogger({
 
     const user = getLocalSession();
     if (user) {
-      await supabase.from('logged_sets').insert({
+      const { error: insertError } = await supabase.from('logged_sets').insert({
         id:           loggedSet.id,
         user_id:      user.id,
         session_id:   loggedSet.sessionId,
@@ -166,6 +167,10 @@ export function SetLogger({
         is_pr:        false,
         completed_at: loggedSet.completedAt,
       });
+      if (insertError) {
+        setError(`Failed to save set: ${insertError.message}`);
+        return;
+      }
     }
 
     const isPR = await checkIsPR(exercise.id, loggedSet.weightKg, reps, sessionId);
