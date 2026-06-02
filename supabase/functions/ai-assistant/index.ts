@@ -91,31 +91,6 @@ const TOOLS = [
     },
   },
   {
-    name: 'remove_exercise_from_template',
-    description: 'Remove an exercise from a workout template.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        templateId: { type: 'string', description: 'push, pull, legs, core, glutes, or back' },
-        exerciseId: { type: 'string', description: 'Exact exercise ID to remove' },
-      },
-      required: ['templateId', 'exerciseId'],
-    },
-  },
-  {
-    name: 'remove_stretch_from_template',
-    description: 'Remove a stretch from a workout template pre or post routine.',
-    input_schema: {
-      type: 'object',
-      properties: {
-        templateId: { type: 'string', description: 'push, pull, legs, core, glutes, or back' },
-        stretchId:  { type: 'string', description: 'Exact stretch ID to remove' },
-        phase:      { type: 'string', enum: ['pre', 'post'], description: 'Pre-workout or post-workout' },
-      },
-      required: ['templateId', 'stretchId', 'phase'],
-    },
-  },
-  {
     name: 'set_starting_weight',
     description: 'Set the suggested starting weight and reps/duration for an exercise for this user. Call this for every exercise you add.',
     input_schema: {
@@ -195,7 +170,6 @@ function buildSystemPrompt(body: RequestBody): string {
 - Call set_starting_weight for EVERY exercise/stretch you add so the user starts at an appropriate level.
 - After all tool calls, give a brief 1–2 sentence summary of what was planned.
 - You can suggest exercises and stretches that are not in the library — use your own knowledge to create them.
-- Never use emojis in your responses.
 
 ## EXERCISE LIBRARY
 ${exLines}
@@ -224,13 +198,12 @@ async function callClaude(messages: unknown[], system: string, apiKey: string): 
     headers: {
       'x-api-key': apiKey,
       'anthropic-version': '2023-06-01',
-      'anthropic-beta': 'prompt-caching-2024-07-31',
       'content-type': 'application/json',
     },
     body: JSON.stringify({
       model: 'claude-sonnet-4-6',
       max_tokens: 2048,
-      system: [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }],
+      system,
       tools: TOOLS,
       messages,
     }),
@@ -294,23 +267,6 @@ async function executeActions(
           exercise_id: action.stretchId, phase: action.phase,
           position: pos, rest_seconds: action.restSeconds,
         });
-        if (!error) applied.push(action.label as string);
-
-      } else if (action.kind === 'remove_exercise') {
-        const { error } = await db.from('template_exercises')
-          .delete()
-          .eq('user_id', userId)
-          .eq('template_id', action.templateId as string)
-          .eq('exercise_id', action.exerciseId as string);
-        if (!error) applied.push(action.label as string);
-
-      } else if (action.kind === 'remove_stretch') {
-        const { error } = await db.from('template_stretches')
-          .delete()
-          .eq('user_id', userId)
-          .eq('template_id', action.templateId as string)
-          .eq('exercise_id', action.stretchId as string)
-          .eq('phase', action.phase as string);
         if (!error) applied.push(action.label as string);
 
       } else if (action.kind === 'set_weight') {
@@ -395,24 +351,6 @@ async function planMode(
           kind: 'add_stretch', templateId: inp.templateId, stretchId: stId,
           phase: inp.phase, restSeconds: inp.restSeconds,
           label: `Add ${stName} to ${inp.templateId as string} ${inp.phase as string}-workout (${inp.restSeconds as number}s)`,
-        });
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ success: true }) });
-
-      } else if (block.name === 'remove_exercise_from_template') {
-        const exId   = inp.exerciseId as string;
-        const exName = exerciseLibrary.find(e => e.id === exId)?.name ?? createdItems.find(c => c.id === exId)?.name ?? exId;
-        proposedActions.push({
-          kind: 'remove_exercise', templateId: inp.templateId, exerciseId: exId,
-          label: `Remove ${exName} from ${inp.templateId as string} day`,
-        });
-        toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ success: true }) });
-
-      } else if (block.name === 'remove_stretch_from_template') {
-        const stId   = inp.stretchId as string;
-        const stName = stretchLibrary.find(s => s.id === stId)?.name ?? createdItems.find(c => c.id === stId)?.name ?? stId;
-        proposedActions.push({
-          kind: 'remove_stretch', templateId: inp.templateId, stretchId: stId, phase: inp.phase,
-          label: `Remove ${stName} from ${inp.templateId as string} ${inp.phase as string}-workout`,
         });
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ success: true }) });
 
