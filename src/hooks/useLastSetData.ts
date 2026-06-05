@@ -1,42 +1,34 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
 
 export function useLastSetData(
   exerciseId: string,
   setNumber: number,
   currentSessionId: string | null,
 ): { weightKg: number; reps: number } | null | undefined {
-  const [data, setData] = useState<{ weightKg: number; reps: number } | null | undefined>(undefined);
+  const user = getLocalSession();
 
-  const load = useCallback(async () => {
-    if (!exerciseId) return;
-    const user = getLocalSession();
-    if (!user) { setData(null); return; }
+  return useLiveQuery(async () => {
+    if (!exerciseId || !user) return null;
 
-    let query = supabase
-      .from('logged_sets')
-      .select('weight_kg, reps')
-      .eq('user_id', user.id)
-      .eq('exercise_id', exerciseId)
-      .eq('set_number', setNumber)
-      .eq('is_warmup', false)
-      .order('completed_at', { ascending: false })
-      .limit(1);
+    const db = getDB(user.id);
 
-    if (currentSessionId) {
-      query = query.neq('session_id', currentSessionId);
-    }
+    const candidates = await db.sets
+      .where('[userId+exerciseId]')
+      .equals([user.id, exerciseId])
+      .filter(
+        (s) =>
+          s.setNumber === setNumber &&
+          !s.isWarmup &&
+          s.sessionId !== (currentSessionId ?? ''),
+      )
+      .toArray();
 
-    const { data: rows } = await query;
-    if (!rows || rows.length === 0) {
-      setData(null);
-    } else {
-      setData({ weightKg: rows[0].weight_kg as number, reps: rows[0].reps as number });
-    }
-  }, [exerciseId, setNumber, currentSessionId]);
+    if (candidates.length === 0) return null;
 
-  useEffect(() => { void load(); }, [load]);
-
-  return data;
+    candidates.sort((a, b) => b.completedAt - a.completedAt);
+    const latest = candidates[0];
+    return { weightKg: latest.weightKg, reps: latest.reps };
+  }, [exerciseId, setNumber, currentSessionId, user?.id]);
 }

@@ -3,8 +3,9 @@ import { nanoid } from 'nanoid';
 import { Plus, TrendDown, TrendUp } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
+import { enqueueSync } from '@/lib/sync';
 import type { BodyStat } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -118,7 +119,9 @@ function LogForm({
     };
     const user = getLocalSession();
     if (user) {
-      await supabase.from('body_stats').insert({
+      const db = getDB(user.id);
+      await db.bodyStats.put({ ...entry, userId: user.id });
+      await enqueueSync(user.id, 'body_stats', 'upsert', {
         id:        entry.id,
         user_id:   user.id,
         date:      entry.date,
@@ -265,19 +268,19 @@ export default function BodyStats() {
   useEffect(() => {
     const user = getLocalSession();
     if (!user) { setStats([]); return; }
-    supabase
-      .from('body_stats')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('date', { ascending: false })
-      .then(({ data }) => {
-        setStats((data ?? []).map((r) => ({
-          id:        r.id as string,
-          date:      r.date as number,
-          weightKg:  r.weight_kg as number | undefined,
-          waistCm:   r.waist_cm as number | undefined,
-          chestCm:   r.chest_cm as number | undefined,
-          notes:     r.notes as string | undefined,
+    const db = getDB(user.id);
+    db.bodyStats
+      .where('userId').equals(user.id)
+      .toArray()
+      .then((rows) => {
+        rows.sort((a, b) => b.date - a.date);
+        setStats(rows.map((r) => ({
+          id:       r.id,
+          date:     r.date,
+          weightKg: r.weightKg,
+          waistCm:  r.waistCm,
+          chestCm:  r.chestCm,
+          notes:    r.notes,
         })));
       });
   }, [refreshToken]);

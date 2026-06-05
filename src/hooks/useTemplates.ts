@@ -1,100 +1,168 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
-import { supabase } from '@/lib/supabase';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
+import { getDB, type DexieTemplateExercise } from '@/data/db';
+import { enqueueSync } from '@/lib/sync';
 import { templates as staticTemplates, templateMap as defaultTemplateMap } from '@/data/templates';
 import type { WorkoutTemplate, TemplateExercise, SubstituteConfig } from '@/types';
 
 export { staticTemplates as defaultTemplates };
 
-function rowToTemplateExercise(row: Record<string, unknown>): TemplateExercise {
+function dexieToTemplateExercise(row: DexieTemplateExercise): TemplateExercise {
   return {
-    exerciseId:        row.exercise_id as string,
-    sets:              row.sets as number,
-    repRange:          [row.rep_range_min as number, row.rep_range_max as number],
-    startingWeightKg:  row.starting_weight_kg as number ?? 0,
-    restSeconds:       row.rest_seconds as number ?? 60,
-    isBodyweight:      row.is_bodyweight as boolean ?? false,
-    isTimed:           row.is_timed as boolean ?? false,
-    isSuperset:        row.is_superset as boolean,
-    supersetGroupId:   row.superset_group_id as string | undefined,
-    substitutes:       (row.substitutes as SubstituteConfig[] | null) ?? [],
+    exerciseId:        row.exerciseId,
+    sets:              row.sets,
+    repRange:          [row.repRangeMin, row.repRangeMax],
+    startingWeightKg:  row.startingWeightKg,
+    restSeconds:       row.restSeconds,
+    isBodyweight:      row.isBodyweight,
+    isTimed:           row.isTimed,
+    isSuperset:        row.isSuperset,
+    supersetGroupId:   row.supersetGroupId,
+    substitutes:       row.substitutes ?? [],
   };
 }
 
 export function useTemplate(templateId: string): [WorkoutTemplate | undefined, () => void] {
-  const [template, setTemplate] = useState<WorkoutTemplate | undefined>(undefined);
+  const user = getLocalSession();
+  const [refreshToken, setRefreshToken] = useState(0);
 
-  const load = useCallback(async () => {
-    if (!templateId) return;
-    const user = getLocalSession();
-    if (!user) return;
+  const template = useLiveQuery(async () => {
+    if (!templateId || !user) return undefined;
+
     const meta = defaultTemplateMap.get(templateId);
-    if (!meta) return;
+    if (!meta) return undefined;
 
-    const { data } = await supabase
-      .from('template_exercises')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('template_id', templateId)
-      .order('position');
+    const db = getDB(user.id);
+    const rows = await db.templateExercises
+      .where('[userId+templateId]')
+      .equals([user.id, templateId])
+      .toArray();
 
-    // Fall back to static exercises when Supabase has no rows yet (fresh account or data loss)
-    const exercises = (data && data.length > 0) ? data.map(rowToTemplateExercise) : meta.exercises;
-    setTemplate({ ...meta, exercises });
-  }, [templateId]);
+    rows.sort((a, b) => a.position - b.position);
 
-  useEffect(() => { void load(); }, [load]);
+    const exercises = rows.length > 0 ? rows.map(dexieToTemplateExercise) : meta.exercises;
+    return { ...meta, exercises };
+  }, [templateId, user?.id, refreshToken]);
 
-  return [template, load];
+  const reload = () => setRefreshToken((t) => t + 1);
+  return [template, reload];
 }
 
 export async function saveTemplate(template: WorkoutTemplate): Promise<void> {
   const user = getLocalSession();
   if (!user) return;
 
-  await supabase
-    .from('template_exercises')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('template_id', template.id);
+  const db = getDB(user.id);
+  const versionKey = `${user.id}_${template.id}`;
 
-  if (template.exercises.length > 0) {
-    await supabase.from('template_exercises').insert(
-      template.exercises.map((te, i) => ({
-        id:                 nanoid(),
-        user_id:            user.id,
-        template_id:        template.id,
-        exercise_id:        te.exerciseId,
-        position:           i,
-        sets:               te.sets,
-        rep_range_min:      te.repRange[0],
-        rep_range_max:      te.repRange[1],
-        starting_weight_kg: te.startingWeightKg,
-        rest_seconds:       te.restSeconds,
-        is_bodyweight:      te.isBodyweight,
-        is_timed:           te.isTimed,
-        is_superset:        te.isSuperset,
-        superset_group_id:  te.supersetGroupId ?? null,
-        substitutes:        te.substitutes ?? [],
-      })),
-    );
-  }
+  // Build rows with stable IDs shared between Dexie and the sync queue payload
+  const rows = template.exercises.map((te, i) => {
+    const id = nanoid();
+    const dexie: DexieTemplateExercise = {
+      id,
+      userId:          user.id,
+      templateId:      template.id,
+      exerciseId:      te.exerciseId,
+      position:        i,
+      sets:            te.sets,
+      repRangeMin:     te.repRange[0],
+      repRangeMax:     te.repRange[1],
+      startingWeightKg:te.startingWeightKg,
+      restSeconds:     te.restSeconds,
+      isBodyweight:    te.isBodyweight,
+      isTimed:         te.isTimed,
+      isSuperset:      te.isSuperset,
+      supersetGroupId: te.supersetGroupId,
+      substitutes:     te.substitutes ?? [],
+    };
+    const snake = {
+      id,
+      user_id:            user.id,
+      template_id:        template.id,
+      exercise_id:        te.exerciseId,
+      position:           i,
+      sets:               te.sets,
+      rep_range_min:      te.repRange[0],
+      rep_range_max:      te.repRange[1],
+      starting_weight_kg: te.startingWeightKg,
+      rest_seconds:       te.restSeconds,
+      is_bodyweight:      te.isBodyweight,
+      is_timed:           te.isTimed,
+      is_superset:        te.isSuperset,
+      superset_group_id:  te.supersetGroupId ?? null,
+      substitutes:        (te.substitutes ?? []) as SubstituteConfig[],
+    };
+    return { dexie, snake };
+  });
+
+  // Increment version for conflict resolution
+  const stored = await db.templateVersions.get(versionKey);
+  const newVersion = (stored?.version ?? 0) + 1;
+
+  // Write to Dexie atomically
+  await db.transaction('rw', [db.templateExercises, db.templateVersions], async () => {
+    await db.templateExercises
+      .where('[userId+templateId]')
+      .equals([user.id, template.id])
+      .delete();
+    await db.templateExercises.bulkPut(rows.map((r) => r.dexie));
+    await db.templateVersions.put({ key: versionKey, version: newVersion });
+  });
+
+  await enqueueSync(user.id, 'template_exercises', 'replaceAll', {
+    templateId: template.id,
+    userId:     user.id,
+    rows:       rows.map((r) => r.snake),
+    version:    newVersion,
+  });
 }
 
-// useTemplates is kept for WorkoutHistory — returns all static templates
+// useTemplates returns all static templates — used by WorkoutHistory for display names
 export function useTemplates(): WorkoutTemplate[] {
   return staticTemplates;
 }
 
-// No longer needed but kept as no-op to avoid breaking any stale imports
 export async function resetTemplate(_id: string): Promise<void> {
-  // Templates start empty per user; "reset" just clears all exercises
   const user = getLocalSession();
   if (!user) return;
-  await supabase
-    .from('template_exercises')
-    .delete()
-    .eq('user_id', user.id)
-    .eq('template_id', _id);
+
+  const db = getDB(user.id);
+  await db.templateExercises
+    .where('[userId+templateId]')
+    .equals([user.id, _id])
+    .delete();
+
+  await enqueueSync(user.id, 'template_exercises', 'replaceAll', {
+    templateId: _id,
+    userId:     user.id,
+    rows:       [],
+    version:    0,
+  });
+}
+
+// useEffect-based variant for components that can't use useLiveQuery directly
+export function useTemplateOnce(templateId: string): WorkoutTemplate | undefined {
+  const [template, setTemplate] = useState<WorkoutTemplate | undefined>(undefined);
+  const user = getLocalSession();
+
+  useEffect(() => {
+    if (!templateId || !user) return;
+    const meta = defaultTemplateMap.get(templateId);
+    if (!meta) return;
+
+    const db = getDB(user.id);
+    db.templateExercises
+      .where('[userId+templateId]')
+      .equals([user.id, templateId])
+      .toArray()
+      .then((rows) => {
+        rows.sort((a, b) => a.position - b.position);
+        const exercises = rows.length > 0 ? rows.map(dexieToTemplateExercise) : meta.exercises;
+        setTemplate({ ...meta, exercises });
+      });
+  }, [templateId, user?.id]);
+
+  return template;
 }

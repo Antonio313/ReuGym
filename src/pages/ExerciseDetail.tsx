@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft, Trophy, PencilSimple } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
 import { useExercises, useStretches } from '@/hooks/useExercises';
 import type { LoggedSet, WorkoutSession } from '@/types';
 
@@ -232,29 +232,30 @@ export default function ExerciseDetail() {
     if (!user) { setData({ allSets: [], sessions: [], bySession: new Map() }); return; }
 
     const load = async () => {
-      const { data: setRows } = await supabase
-        .from('logged_sets')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('exercise_id', exerciseId)
-        .order('completed_at');
+      const db = getDB(user.id);
 
-      if (!setRows || setRows.length === 0) {
+      const setRows = await db.sets
+        .where('[userId+exerciseId]')
+        .equals([user.id, exerciseId])
+        .toArray();
+      setRows.sort((a, b) => a.completedAt - b.completedAt);
+
+      if (setRows.length === 0) {
         setData({ allSets: [], sessions: [], bySession: new Map() });
         return;
       }
 
       const allSets: LoggedSet[] = setRows.map((r) => ({
-        id:          r.id as string,
-        sessionId:   r.session_id as string,
-        exerciseId:  r.exercise_id as string,
-        setNumber:   r.set_number as number,
-        weightKg:    r.weight_kg as number,
-        reps:        r.reps as number,
-        rir:         r.rir as number,
-        isWarmup:    r.is_warmup as boolean,
-        isPR:        r.is_pr as boolean,
-        completedAt: r.completed_at as number,
+        id:          r.id,
+        sessionId:   r.sessionId,
+        exerciseId:  r.exerciseId,
+        setNumber:   r.setNumber,
+        weightKg:    r.weightKg,
+        reps:        r.reps,
+        rir:         r.rir,
+        isWarmup:    r.isWarmup,
+        isPR:        r.isPR,
+        completedAt: r.completedAt,
       }));
 
       const bySession = new Map<string, LoggedSet[]>();
@@ -265,20 +266,19 @@ export default function ExerciseDetail() {
       }
 
       const sessionIds = [...bySession.keys()];
-      const { data: sessionRows } = await supabase
-        .from('workout_sessions')
-        .select('*')
-        .in('id', sessionIds)
-        .not('completed_at', 'is', null);
+      const sessionRows = await db.sessions
+        .where('id').anyOf(sessionIds)
+        .filter((s) => s.completedAt != null)
+        .toArray();
 
-      const sessions: WorkoutSession[] = (sessionRows ?? [])
+      const sessions: WorkoutSession[] = sessionRows
         .map((r) => ({
-          id:              r.id as string,
-          templateId:      r.template_id as string,
-          startedAt:       r.started_at as number,
-          completedAt:     r.completed_at as number | undefined,
-          durationSeconds: r.duration_seconds as number | undefined,
-          notes:           r.notes as string | undefined,
+          id:              r.id,
+          templateId:      r.templateId,
+          startedAt:       r.startedAt,
+          completedAt:     r.completedAt,
+          durationSeconds: r.durationSeconds,
+          notes:           r.notes,
         }))
         .sort((a, b) => a.startedAt - b.startedAt);
 

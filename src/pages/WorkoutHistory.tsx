@@ -3,8 +3,9 @@ import { Link } from 'react-router-dom';
 import { ClockCounterClockwise, Trophy, Export, Upload, DeviceMobile } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
+import { initialSync } from '@/lib/sync';
 import { exportData, importFromJson, migrateFromIndexedDB, type ImportResult } from '@/lib/dataTransfer';
 import { useExercises } from '@/hooks/useExercises';
 import { useTemplates } from '@/hooks/useTemplates';
@@ -180,9 +181,10 @@ export default function WorkoutHistory() {
       const text = await file.text();
       const json = JSON.parse(text);
       const result = await importFromJson(json, user.id);
+      // Pull all imported data from Supabase into Dexie so the UI reflects it
+      await initialSync(user.id);
       setImportResult(result);
       refreshRef.current += 1;
-      // Re-trigger the history fetch by updating enrichedSessions
       setEnrichedSessions(undefined);
     } catch (err) {
       setImportError(err instanceof Error ? err.message : 'Failed to import file.');
@@ -200,6 +202,8 @@ export default function WorkoutHistory() {
     setShowImportMenu(false);
     try {
       const result = await migrateFromIndexedDB(user.id);
+      // Pull migrated data from Supabase into Dexie so the UI reflects it
+      await initialSync(user.id);
       setImportResult(result);
       setEnrichedSessions(undefined);
     } catch (err) {
@@ -214,49 +218,49 @@ export default function WorkoutHistory() {
     if (!user) { setEnrichedSessions([]); return; }
 
     const load = async () => {
-      const { data: sessionRows } = await supabase
-        .from('workout_sessions')
-        .select('*')
-        .eq('user_id', user.id)
-        .not('completed_at', 'is', null)
-        .order('started_at', { ascending: false });
+      const db = getDB(user.id);
 
-      if (!sessionRows || sessionRows.length === 0) { setEnrichedSessions([]); return; }
+      const sessionRows = await db.sessions
+        .where('userId').equals(user.id)
+        .filter((s) => s.completedAt != null)
+        .toArray();
+      sessionRows.sort((a, b) => b.startedAt - a.startedAt);
 
-      const sessionIds = sessionRows.map((r) => r.id as string);
-      const { data: setRows } = await supabase
-        .from('logged_sets')
-        .select('session_id, exercise_id, is_warmup, is_pr, completed_at')
-        .in('session_id', sessionIds);
+      if (sessionRows.length === 0) { setEnrichedSessions([]); return; }
 
-      const setsBySession = new Map<string, typeof setRows>();
-      for (const s of setRows ?? []) {
-        const arr = setsBySession.get(s.session_id as string) ?? [];
+      const sessionIds = new Set(sessionRows.map((s) => s.id));
+      const allSets = await db.sets
+        .where('userId').equals(user.id)
+        .filter((s) => sessionIds.has(s.sessionId))
+        .toArray();
+
+      const setsBySession = new Map<string, typeof allSets>();
+      for (const s of allSets) {
+        const arr = setsBySession.get(s.sessionId) ?? [];
         arr.push(s);
-        setsBySession.set(s.session_id as string, arr);
+        setsBySession.set(s.sessionId, arr);
       }
 
       const enriched: EnrichedSession[] = sessionRows.map((row) => {
         const session: WorkoutSession = {
-          id:              row.id as string,
-          templateId:      row.template_id as string,
-          startedAt:       row.started_at as number,
-          completedAt:     row.completed_at as number | undefined,
-          durationSeconds: row.duration_seconds as number | undefined,
-          notes:           row.notes as string | undefined,
+          id:              row.id,
+          templateId:      row.templateId,
+          startedAt:       row.startedAt,
+          completedAt:     row.completedAt,
+          durationSeconds: row.durationSeconds,
+          notes:           row.notes,
         };
         const sets = setsBySession.get(session.id) ?? [];
-        const workSets = sets.filter((s) => !s.is_warmup);
-        const prCount = workSets.filter((s) => s.is_pr).length;
+        const workSets = sets.filter((s) => !s.isWarmup);
+        const prCount = workSets.filter((s) => s.isPR).length;
 
         const seenIds = new Set<string>();
         const exerciseIds: string[] = [];
-        const sorted = [...sets].sort((a, b) => (a.completed_at as number) - (b.completed_at as number));
+        const sorted = [...sets].sort((a, b) => a.completedAt - b.completedAt);
         for (const s of sorted) {
-          const id = s.exercise_id as string;
-          if (!seenIds.has(id)) {
-            seenIds.add(id);
-            exerciseIds.push(id);
+          if (!seenIds.has(s.exerciseId)) {
+            seenIds.add(s.exerciseId);
+            exerciseIds.push(s.exerciseId);
           }
         }
 

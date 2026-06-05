@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
 import { saveExercisePref } from '@/hooks/useExercisePref';
 import type { Exercise, ExercisePref } from '@/types';
 
@@ -49,16 +49,15 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
   useEffect(() => {
     const user = getLocalSession();
     if (!user) return;
-    supabase
-      .from('logged_sets')
-      .select('rir')
-      .eq('user_id', user.id)
-      .eq('session_id', sessionId)
-      .eq('exercise_id', exercise.id)
-      .eq('is_warmup', false)
-      .then(({ data }) => {
-        if (!data || data.length < 2) return;
-        setAvgRIR(data.reduce((sum, s) => sum + (s.rir as number), 0) / data.length);
+    const db = getDB(user.id);
+    db.sets
+      .where('[userId+sessionId]')
+      .equals([user.id, sessionId])
+      .filter((s) => s.exerciseId === exercise.id && !s.isWarmup)
+      .toArray()
+      .then((sets) => {
+        if (sets.length < 2) return;
+        setAvgRIR(sets.reduce((sum, s) => sum + s.rir, 0) / sets.length);
       });
   }, [sessionId, exercise.id]);
 

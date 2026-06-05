@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from 'react-router-dom';
 import { AuthProvider, useAuth } from '@/context/AuthContext';
+import { SyncGate } from '@/components/SyncGate';
 import { BottomNav } from '@/components/layout/BottomNav';
 import Home from '@/pages/Home';
 import WorkoutActive from '@/pages/WorkoutActive';
@@ -10,6 +11,7 @@ import BodyStats from '@/pages/BodyStats';
 import StyleGuide from '@/pages/StyleGuide';
 import TemplateEditor from '@/pages/TemplateEditor';
 import CreateExercise from '@/pages/CreateExercise';
+import SyncDebug from '@/pages/SyncDebug';
 import SignIn from '@/pages/SignIn';
 import SignUp from '@/pages/SignUp';
 
@@ -66,6 +68,7 @@ function AppRoutes() {
         <Route path="/exercise/:exerciseId/edit" element={<CreateExercise />} />
         <Route path="/stretch/new"               element={<Navigate to="/exercise/new?isStretch=true" replace />} />
         <Route path="/stretch/:id/edit"          element={<StretchEditRedirect />} />
+        <Route path="/sync-debug"                element={<SyncDebug />} />
         <Route path="/signin"                    element={<SignIn />} />
         <Route path="/signup"                    element={<SignUp />} />
       </Routes>
@@ -78,7 +81,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <AppRoutes />
+        <SyncGate>
+          <AppRoutes />
+        </SyncGate>
       </AuthProvider>
     </BrowserRouter>
   );

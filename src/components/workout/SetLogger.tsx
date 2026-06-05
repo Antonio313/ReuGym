@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
+import { enqueueSync } from '@/lib/sync';
 import { checkIsPR } from '@/lib/pr';
 import { useLastSetData } from '@/hooks/useLastSetData';
 import { useExercisePref } from '@/hooks/useExercisePref';
@@ -139,22 +140,29 @@ export function SetLogger({
     setError(null);
     setActiveField(null);
 
+    const user = getLocalSession();
+
+    // Check PR before writing so we can persist the correct value in one shot
+    const weightKg = templateExercise.isBodyweight ? 0 : weight;
+    const isPR = !isWarmup && await checkIsPR(exercise.id, weightKg, reps, sessionId);
+
     const loggedSet = {
       id: nanoid(),
       sessionId,
       exerciseId: exercise.id,
       setNumber,
-      weightKg: templateExercise.isBodyweight ? 0 : weight,
+      weightKg,
       reps,
       rir,
       isWarmup,
-      isPR: false,
+      isPR,
       completedAt: Date.now(),
     };
 
-    const user = getLocalSession();
     if (user) {
-      const { error: insertError } = await supabase.from('logged_sets').insert({
+      const db = getDB(user.id);
+      await db.sets.put({ ...loggedSet, userId: user.id });
+      await enqueueSync(user.id, 'logged_sets', 'upsert', {
         id:           loggedSet.id,
         user_id:      user.id,
         session_id:   loggedSet.sessionId,
@@ -164,18 +172,12 @@ export function SetLogger({
         reps:         loggedSet.reps,
         rir:          loggedSet.rir,
         is_warmup:    loggedSet.isWarmup,
-        is_pr:        false,
+        is_pr:        loggedSet.isPR,
         completed_at: loggedSet.completedAt,
       });
-      if (insertError) {
-        setError(`Failed to save set: ${insertError.message}`);
-        return;
-      }
     }
 
-    const isPR = await checkIsPR(exercise.id, loggedSet.weightKg, reps, sessionId);
     if (isPR) {
-      if (user) await supabase.from('logged_sets').update({ is_pr: true }).eq('id', loggedSet.id);
       setJustLoggedPR(true);
       setTimeout(() => setJustLoggedPR(false), 2000);
     }

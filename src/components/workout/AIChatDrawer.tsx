@@ -253,6 +253,16 @@ export function AIChatDrawer({ open, onClose, onActionsApplied }: Props) {
     const user = getLocalSession();
     if (!user) return;
 
+    if (!navigator.onLine) {
+      setMessages((prev) => [
+        ...prev,
+        { role: 'user', content: text },
+        { role: 'assistant', content: 'The AI assistant requires an internet connection. Please try again when you\'re online.' },
+      ]);
+      setInput('');
+      return;
+    }
+
     setInput('');
     setMessages(prev => [...prev, { role: 'user', content: text }]);
     setLoading(true);

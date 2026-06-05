@@ -5,8 +5,8 @@ import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
 import { AIChatDrawer } from '@/components/workout/AIChatDrawer';
 import { useTemplates } from '@/hooks/useTemplates';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
 import type { WorkoutTemplate } from '@/types';
 
 const DAY_LABEL_ORDER = ['push', 'pull', 'legs', 'core', 'glutes', 'back'] as const;
@@ -104,33 +104,28 @@ function DayCard({ template, lastSessionDate }: DayCardProps) {
   );
 }
 
-// Module-level cache so "last session" dates appear instantly on revisit.
-let _lastSessionsCache: Record<string, number> | null = null;
-
 export default function Home() {
   const isSunday = new Date().getDay() === 0;
   const navigate = useNavigate();
 
   const templates = useTemplates();
   const [aiOpen, setAiOpen] = useState(false);
-  const [lastSessions, setLastSessions] = useState<Record<string, number>>(_lastSessionsCache ?? {});
+  const [lastSessions, setLastSessions] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const user = getLocalSession();
     if (!user) return;
-    supabase
-      .from('workout_sessions')
-      .select('template_id, completed_at')
-      .eq('user_id', user.id)
-      .not('completed_at', 'is', null)
-      .order('started_at', { ascending: false })
-      .then(({ data }) => {
+    const db = getDB(user.id);
+    db.sessions
+      .where('userId').equals(user.id)
+      .filter((s) => s.completedAt != null)
+      .toArray()
+      .then((rows) => {
+        rows.sort((a, b) => b.startedAt - a.startedAt);
         const results: Record<string, number> = {};
-        for (const row of data ?? []) {
-          const tId = row.template_id as string;
-          if (!results[tId]) results[tId] = row.completed_at as number;
+        for (const row of rows) {
+          if (!results[row.templateId]) results[row.templateId] = row.completedAt!;
         }
-        _lastSessionsCache = results;
         setLastSessions(results);
       });
   }, []);

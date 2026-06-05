@@ -13,8 +13,9 @@ import { useDayStretches } from '@/hooks/useDayStretches';
 import { loadAllPrefs } from '@/hooks/useExercisePref';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { enableWakeLock, disableWakeLock } from '@/lib/wakeLock';
-import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
+import { enqueueSync } from '@/lib/sync';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
@@ -44,7 +45,6 @@ export default function WorkoutActive() {
   const [feelingQueue, setFeelingQueue] = useState<FeelingEntry[]>([]);
   const [completionStats, setCompletionStats] = useState<CompletionStats | null>(null);
   const [showUpcoming, setShowUpcoming] = useState(false);
-  const [sessionError, setSessionError] = useState<string | null>(null);
   const [restNextExercise, setRestNextExercise] = useState<Exercise | null>(null);
   const [restNextTarget, setRestNextTarget] = useState<{ weight: number | null; reps: [number, number] } | null>(null);
   // pendingRest holds the seconds to start after feeling queue drains
@@ -166,22 +166,31 @@ export default function WorkoutActive() {
 
     const user = getLocalSession();
     if (sessionId && user) {
-      const { error: updateError } = await supabase
-        .from('workout_sessions')
-        .update({ completed_at: completedAt, duration_seconds: durationSeconds })
-        .eq('id', sessionId);
-      if (updateError) console.error('Failed to complete session:', updateError.message);
-      const { data: setsData } = await supabase
-        .from('logged_sets')
-        .select('*')
-        .eq('session_id', sessionId);
-      const workSets = (setsData ?? []).filter((s) => !s.is_warmup);
+      const db = getDB(user.id);
+
+      // Update session in Dexie then queue the change for Supabase
+      await db.sessions.update(sessionId, { completedAt, durationSeconds });
+      await enqueueSync(user.id, 'workout_sessions', 'upsert', {
+        id:               sessionId,
+        user_id:          user.id,
+        template_id:      template?.id,
+        started_at:       sessionStartedAt,
+        completed_at:     completedAt,
+        duration_seconds: durationSeconds,
+      });
+
+      // Read completion stats from Dexie (already populated by SetLogger)
+      const allSets = await db.sets
+        .where('[userId+sessionId]')
+        .equals([user.id, sessionId])
+        .toArray();
+      const workSets = allSets.filter((s) => !s.isWarmup);
       stats = {
         durationSeconds,
         exercisesCompleted: template?.exercises.length ?? 0,
         totalSets: workSets.length,
-        prsHit: workSets.filter((s) => s.is_pr).length,
-        totalVolumeKg: Math.round(workSets.reduce((sum, s) => sum + (s.weight_kg as number) * (s.reps as number), 0)),
+        prsHit: workSets.filter((s) => s.isPR).length,
+        totalVolumeKg: Math.round(workSets.reduce((sum, s) => sum + s.weightKg * s.reps, 0)),
       };
     }
 
@@ -202,13 +211,11 @@ export default function WorkoutActive() {
     const now = Date.now();
     const user = getLocalSession();
     if (user) {
-      const { error: insertError } = await supabase.from('workout_sessions').insert({
+      const db = getDB(user.id);
+      await db.sessions.put({ id, userId: user.id, templateId: template.id, startedAt: now });
+      await enqueueSync(user.id, 'workout_sessions', 'upsert', {
         id, user_id: user.id, template_id: template.id, started_at: now,
       });
-      if (insertError) {
-        setSessionError(`Could not start session: ${insertError.message}`);
-        return;
-      }
     }
     startSession(template, id, now);
     enableWakeLock();
@@ -532,22 +539,6 @@ export default function WorkoutActive() {
           onBegin={handleStartWorkout}
           onBack={() => navigate(-1)}
         />
-        {sessionError && (
-          <div
-            className="fixed bottom-4 left-4 right-4 mx-auto px-4 py-3 font-body"
-            style={{
-              maxWidth: 'var(--max-content-width)',
-              background: 'var(--color-surface)',
-              border: '1px solid var(--color-regression)',
-              borderRadius: 'var(--radius-md)',
-              color: 'var(--color-regression)',
-              fontSize: 'var(--text-meta)',
-              zIndex: 50,
-            }}
-          >
-            {sessionError}
-          </div>
-        )}
       </>
     );
   }

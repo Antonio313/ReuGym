@@ -1,0 +1,296 @@
+import Dexie, { type Table } from 'dexie';
+import type { SubstituteConfig } from '@/types';
+
+// ─── Dexie Row Types (camelCase, mirrors Supabase tables) ─────────
+
+export type DexieSet = {
+  id: string;
+  userId: string;
+  sessionId: string;
+  exerciseId: string;
+  setNumber: number;
+  weightKg: number;
+  reps: number;
+  rir: number;
+  isWarmup: boolean;
+  isPR: boolean;
+  completedAt: number;
+};
+
+export type DexieSession = {
+  id: string;
+  userId: string;
+  templateId: string;
+  startedAt: number;
+  completedAt?: number;
+  durationSeconds?: number;
+  notes?: string;
+};
+
+export type DexieBodyStat = {
+  id: string;
+  userId: string;
+  date: number;
+  weightKg?: number;
+  waistCm?: number;
+  chestCm?: number;
+  notes?: string;
+};
+
+// exercise_prefs has no id — compound PK [userId+exerciseId]
+export type DexieExercisePref = {
+  userId: string;
+  exerciseId: string;
+  startingWeightKg: number;
+  startingReps?: number;
+};
+
+export type DexieTemplateExercise = {
+  id: string;
+  userId: string;
+  templateId: string;
+  exerciseId: string;
+  position: number;
+  sets: number;
+  repRangeMin: number;
+  repRangeMax: number;
+  startingWeightKg: number;
+  restSeconds: number;
+  isBodyweight: boolean;
+  isTimed: boolean;
+  isSuperset: boolean;
+  supersetGroupId?: string;
+  substitutes?: SubstituteConfig[];
+};
+
+export type DexieTemplateStretch = {
+  id: string;
+  userId: string;
+  templateId: string;
+  exerciseId: string;
+  phase: 'pre' | 'post';
+  position: number;
+  sets: number;
+  repRangeMin: number;
+  repRangeMax: number;
+  startingWeightKg: number;
+  restSeconds: number;
+  isBodyweight: boolean;
+  isTimed: boolean;
+};
+
+export type DexieCustomExercise = {
+  id: string;
+  userId: string;
+  name: string;
+  category: string;
+  type: string;
+  muscles: string[];
+  defaultRepRange?: [number, number];
+  startingWeightKg?: number;
+  restSeconds?: number;
+  isBodyweight?: boolean;
+  isCable?: boolean;
+  isTimed?: boolean;
+  isStretch?: boolean;
+  videoUrl?: string;
+  notes?: string;
+};
+
+// ─── Sync Infrastructure Types ────────────────────────────────────
+
+export type SupabaseTableName =
+  | 'logged_sets'
+  | 'workout_sessions'
+  | 'body_stats'
+  | 'exercise_prefs'
+  | 'template_exercises'
+  | 'template_stretches'
+  | 'custom_exercises';
+
+export type ReplaceAllPayload = {
+  templateId: string;
+  phase?: 'pre' | 'post';
+  userId: string;
+  rows: Record<string, unknown>[];
+  version: number;
+};
+
+export type SyncOperation = {
+  id: string;
+  userId: string;
+  table: SupabaseTableName;
+  operation: 'upsert' | 'delete' | 'replaceAll';
+  // upsert: snake_case row ready for Supabase
+  // delete: { id: string }
+  // replaceAll: ReplaceAllPayload
+  payload: unknown;
+  createdAt: number;
+  attempts: number;
+  error?: string;
+};
+
+export type SyncMeta = {
+  userId: string;
+  initialSyncComplete: boolean;
+  lastSyncedAt: number;
+};
+
+// Tracks template versions for conflict resolution (higher version wins)
+export type TemplateVersion = {
+  key: string;   // `${userId}_${templateId}` or `${userId}_${templateId}_${phase}`
+  version: number;
+};
+
+// ─── Dexie Database Class ─────────────────────────────────────────
+
+class WorkoutDB extends Dexie {
+  sets!: Table<DexieSet, string>;
+  sessions!: Table<DexieSession, string>;
+  bodyStats!: Table<DexieBodyStat, string>;
+  exercisePrefs!: Table<DexieExercisePref, [string, string]>;
+  templateExercises!: Table<DexieTemplateExercise, string>;
+  templateStretches!: Table<DexieTemplateStretch, string>;
+  customExercises!: Table<DexieCustomExercise, string>;
+  syncQueue!: Table<SyncOperation, string>;
+  syncMeta!: Table<SyncMeta, string>;
+  templateVersions!: Table<TemplateVersion, string>;
+
+  constructor(dbName: string) {
+    super(dbName);
+    this.version(1).stores({
+      sets:              'id, userId, [userId+exerciseId], [userId+sessionId], completedAt',
+      sessions:          'id, userId, completedAt, startedAt',
+      bodyStats:         'id, userId, date',
+      exercisePrefs:     '[userId+exerciseId]',
+      templateExercises: 'id, [userId+templateId]',
+      templateStretches: 'id, [userId+templateId]',
+      customExercises:   'id, userId',
+      syncQueue:         'id, userId, createdAt',
+      syncMeta:          'userId',
+      templateVersions:  'key',
+    });
+  }
+}
+
+// ─── Per-user DB Factory ──────────────────────────────────────────
+
+const dbCache = new Map<string, WorkoutDB>();
+
+export function getDB(userId: string): WorkoutDB {
+  if (!dbCache.has(userId)) {
+    dbCache.set(userId, new WorkoutDB(`ReuGymDB_${userId}`));
+  }
+  return dbCache.get(userId)!;
+}
+
+// ─── Row Converters: Supabase snake_case → Dexie camelCase ────────
+
+type Row = Record<string, unknown>;
+
+export function rowToSet(r: Row, userId: string): DexieSet {
+  return {
+    id:          r.id as string,
+    userId,
+    sessionId:   r.session_id as string,
+    exerciseId:  r.exercise_id as string,
+    setNumber:   r.set_number as number,
+    weightKg:    r.weight_kg as number,
+    reps:        r.reps as number,
+    rir:         (r.rir as number) ?? 0,
+    isWarmup:    (r.is_warmup as boolean) ?? false,
+    isPR:        (r.is_pr as boolean) ?? false,
+    completedAt: r.completed_at as number,
+  };
+}
+
+export function rowToSession(r: Row, userId: string): DexieSession {
+  return {
+    id:              r.id as string,
+    userId,
+    templateId:      r.template_id as string,
+    startedAt:       r.started_at as number,
+    completedAt:     r.completed_at as number | undefined,
+    durationSeconds: r.duration_seconds as number | undefined,
+    notes:           r.notes as string | undefined,
+  };
+}
+
+export function rowToBodyStat(r: Row, userId: string): DexieBodyStat {
+  return {
+    id:       r.id as string,
+    userId,
+    date:     r.date as number,
+    weightKg: r.weight_kg as number | undefined,
+    waistCm:  r.waist_cm as number | undefined,
+    chestCm:  r.chest_cm as number | undefined,
+    notes:    r.notes as string | undefined,
+  };
+}
+
+export function rowToExercisePref(r: Row, userId: string): DexieExercisePref {
+  return {
+    userId,
+    exerciseId:       r.exercise_id as string,
+    startingWeightKg: r.starting_weight_kg as number,
+    startingReps:     r.starting_reps as number | undefined,
+  };
+}
+
+export function rowToTemplateExercise(r: Row, userId: string): DexieTemplateExercise {
+  return {
+    id:              r.id as string,
+    userId,
+    templateId:      r.template_id as string,
+    exerciseId:      r.exercise_id as string,
+    position:        r.position as number,
+    sets:            r.sets as number,
+    repRangeMin:     r.rep_range_min as number,
+    repRangeMax:     r.rep_range_max as number,
+    startingWeightKg:(r.starting_weight_kg as number) ?? 0,
+    restSeconds:     (r.rest_seconds as number) ?? 60,
+    isBodyweight:    (r.is_bodyweight as boolean) ?? false,
+    isTimed:         (r.is_timed as boolean) ?? false,
+    isSuperset:      (r.is_superset as boolean) ?? false,
+    supersetGroupId: r.superset_group_id as string | undefined,
+    substitutes:     (r.substitutes as SubstituteConfig[] | null) ?? [],
+  };
+}
+
+export function rowToTemplateStretch(r: Row, userId: string): DexieTemplateStretch {
+  return {
+    id:              r.id as string,
+    userId,
+    templateId:      r.template_id as string,
+    exerciseId:      r.exercise_id as string,
+    phase:           r.phase as 'pre' | 'post',
+    position:        r.position as number,
+    sets:            (r.sets as number) ?? 1,
+    repRangeMin:     (r.rep_range_min as number) ?? 1,
+    repRangeMax:     (r.rep_range_max as number) ?? 1,
+    startingWeightKg:(r.starting_weight_kg as number) ?? 0,
+    restSeconds:     (r.rest_seconds as number) ?? 30,
+    isBodyweight:    (r.is_bodyweight as boolean) ?? false,
+    isTimed:         (r.is_timed as boolean) ?? false,
+  };
+}
+
+export function rowToCustomExercise(r: Row, userId: string): DexieCustomExercise {
+  return {
+    id:               r.id as string,
+    userId,
+    name:             r.name as string,
+    category:         r.category as string,
+    type:             r.type as string,
+    muscles:          r.muscles as string[],
+    defaultRepRange:  r.default_rep_range as [number, number] | undefined,
+    startingWeightKg: r.starting_weight_kg as number | undefined,
+    restSeconds:      r.rest_seconds as number | undefined,
+    isBodyweight:     r.is_bodyweight as boolean | undefined,
+    isCable:          r.is_cable as boolean | undefined,
+    isTimed:          r.is_timed as boolean | undefined,
+    isStretch:        r.is_stretch as boolean | undefined,
+    videoUrl:         r.video_url as string | undefined,
+    notes:            r.notes as string | undefined,
+  };
+}

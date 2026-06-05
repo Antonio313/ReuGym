@@ -1,61 +1,64 @@
-import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
+import { getDB } from '@/data/db';
+import { enqueueSync } from '@/lib/sync';
 import type { ExercisePref } from '@/types';
 
 export function useExercisePref(exerciseId: string): ExercisePref | undefined {
-  const [pref, setPref] = useState<ExercisePref | undefined>(undefined);
+  const user = getLocalSession();
 
-  const load = useCallback(async () => {
-    if (!exerciseId) return;
-    const user = getLocalSession();
-    if (!user) return;
-    const { data } = await supabase
-      .from('exercise_prefs')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('exercise_id', exerciseId)
-      .maybeSingle();
-    if (data) {
-      setPref({
-        exerciseId:       data.exercise_id as string,
-        startingWeightKg: data.starting_weight_kg as number,
-        startingReps:     data.starting_reps as number | undefined,
-      });
-    }
-  }, [exerciseId]);
+  return useLiveQuery(async () => {
+    if (!exerciseId || !user) return undefined;
 
-  useEffect(() => { void load(); }, [load]);
+    const db = getDB(user.id);
+    const row = await db.exercisePrefs.get([user.id, exerciseId]);
+    if (!row) return undefined;
 
-  return pref;
+    return {
+      exerciseId:       row.exerciseId,
+      startingWeightKg: row.startingWeightKg,
+      startingReps:     row.startingReps,
+    };
+  }, [exerciseId, user?.id]);
 }
 
 export async function saveExercisePref(pref: ExercisePref): Promise<void> {
   const user = getLocalSession();
   if (!user) return;
-  await supabase.from('exercise_prefs').upsert({
-    user_id:           user.id,
-    exercise_id:       pref.exerciseId,
+
+  const db = getDB(user.id);
+  await db.exercisePrefs.put({
+    userId:           user.id,
+    exerciseId:       pref.exerciseId,
+    startingWeightKg: pref.startingWeightKg,
+    startingReps:     pref.startingReps,
+  });
+
+  await enqueueSync(user.id, 'exercise_prefs', 'upsert', {
+    user_id:            user.id,
+    exercise_id:        pref.exerciseId,
     starting_weight_kg: pref.startingWeightKg,
-    starting_reps:     pref.startingReps ?? null,
+    starting_reps:      pref.startingReps ?? null,
   });
 }
 
 export async function loadAllPrefs(): Promise<Map<string, ExercisePref>> {
   const user = getLocalSession();
   if (!user) return new Map();
-  const { data } = await supabase
-    .from('exercise_prefs')
-    .select('*')
-    .eq('user_id', user.id);
-  if (!data) return new Map();
+
+  const db = getDB(user.id);
+  const rows = await db.exercisePrefs
+    .where('[userId+exerciseId]')
+    .between([user.id, ''], [user.id, '￿'])
+    .toArray();
+
   return new Map(
-    data.map((r) => [
-      r.exercise_id as string,
+    rows.map((r) => [
+      r.exerciseId,
       {
-        exerciseId:       r.exercise_id as string,
-        startingWeightKg: r.starting_weight_kg as number,
-        startingReps:     r.starting_reps as number | undefined,
+        exerciseId:       r.exerciseId,
+        startingWeightKg: r.startingWeightKg,
+        startingReps:     r.startingReps,
       },
     ]),
   );

@@ -2,10 +2,46 @@ import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SignOut } from '@phosphor-icons/react';
 import { useAuth } from '@/context/AuthContext';
+import { useSyncStatus } from '@/hooks/useSyncStatus';
 
 type HeaderProps = {
   subtitle?: ReactNode;
 };
+
+function SyncDot() {
+  const { status, retry } = useSyncStatus();
+
+  const colors: Record<typeof status, string> = {
+    synced:  'transparent',
+    offline: 'var(--color-text-muted)',
+    syncing: 'var(--color-accent)',
+    error:   'var(--color-regression)',
+  };
+
+  if (status === 'synced') return null;
+
+  return (
+    <button
+      onClick={status === 'error' ? () => void retry() : undefined}
+      title={
+        status === 'offline' ? 'Offline — changes saved locally' :
+        status === 'syncing' ? 'Syncing…' :
+        'Sync error — tap to retry'
+      }
+      style={{
+        width: 8,
+        height: 8,
+        borderRadius: '50%',
+        background: colors[status],
+        border: 'none',
+        padding: 0,
+        cursor: status === 'error' ? 'pointer' : 'default',
+        animation: status === 'syncing' ? 'pulse 1.2s ease-in-out infinite' : 'none',
+        flexShrink: 0,
+      }}
+    />
+  );
+}
 
 export function Header({ subtitle }: HeaderProps) {
   const navigate = useNavigate();
@@ -25,21 +61,24 @@ export function Header({ subtitle }: HeaderProps) {
         borderBottom: 'var(--border-thin)',
       }}
     >
-      <div className="flex flex-col justify-center">
-        <span
-          className="font-display tracking-[0.05em] uppercase"
-          style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)' }}
-        >
-          REUGYM
-        </span>
-        {subtitle && (
+      <div className="flex items-center gap-2">
+        <div className="flex flex-col justify-center">
           <span
-            className="font-body"
-            style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+            className="font-display tracking-[0.05em] uppercase"
+            style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)' }}
           >
-            {subtitle}
+            REUGYM
           </span>
-        )}
+          {subtitle && (
+            <span
+              className="font-body"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+            >
+              {subtitle}
+            </span>
+          )}
+        </div>
+        <SyncDot />
       </div>
       <button
         onClick={handleLogout}

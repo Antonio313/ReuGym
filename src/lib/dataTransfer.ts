@@ -1,4 +1,6 @@
 import { supabase } from '@/lib/supabase';
+import { getDB } from '@/data/db';
+import { getLocalSession } from '@/lib/auth';
 
 export type ImportResult = {
   sessions: number;
@@ -10,86 +12,92 @@ export type ImportResult = {
 // ─── Export ──────────────────────────────────────────────────────
 
 export async function exportData(userId: string): Promise<void> {
+  // Read from Dexie — works offline, faster than network
+  const user = getLocalSession();
+  const db = user ? getDB(user.id) : null;
+
   const [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises] =
-    await Promise.all([
-      supabase.from('workout_sessions').select('*').eq('user_id', userId),
-      supabase.from('logged_sets').select('*').eq('user_id', userId),
-      supabase.from('body_stats').select('*').eq('user_id', userId),
-      supabase.from('exercise_prefs').select('*').eq('user_id', userId),
-      supabase.from('template_exercises').select('*').eq('user_id', userId),
-      supabase.from('template_stretches').select('*').eq('user_id', userId),
-      supabase.from('custom_exercises').select('*').eq('user_id', userId),
-    ]);
+    db
+      ? await Promise.all([
+          db.sessions.where('userId').equals(userId).toArray(),
+          db.sets.where('userId').equals(userId).toArray(),
+          db.bodyStats.where('userId').equals(userId).toArray(),
+          db.exercisePrefs.where('[userId+exerciseId]').between([userId, ''], [userId, '￿']).toArray(),
+          db.templateExercises.where('[userId+templateId]').between([userId, ''], [userId, '￿']).toArray(),
+          db.templateStretches.where('[userId+templateId]').between([userId, ''], [userId, '￿']).toArray(),
+          db.customExercises.where('userId').equals(userId).toArray(),
+        ])
+      : [[], [], [], [], [], [], []];
 
   const payload = {
     version: 2,
     exportedAt: Date.now(),
-    sessions: (sessions.data ?? []).map((r) => ({
+    sessions: sessions.map((r) => ({
       id:              r.id,
-      templateId:      r.template_id,
-      startedAt:       r.started_at,
-      completedAt:     r.completed_at,
-      durationSeconds: r.duration_seconds,
+      templateId:      r.templateId,
+      startedAt:       r.startedAt,
+      completedAt:     r.completedAt,
+      durationSeconds: r.durationSeconds,
       notes:           r.notes,
     })),
-    sets: (sets.data ?? []).map((r) => ({
+    sets: sets.map((r) => ({
       id:          r.id,
-      sessionId:   r.session_id,
-      exerciseId:  r.exercise_id,
-      setNumber:   r.set_number,
-      weightKg:    r.weight_kg,
+      sessionId:   r.sessionId,
+      exerciseId:  r.exerciseId,
+      setNumber:   r.setNumber,
+      weightKg:    r.weightKg,
       reps:        r.reps,
       rir:         r.rir,
-      isWarmup:    r.is_warmup,
-      isPR:        r.is_pr,
-      completedAt: r.completed_at,
+      isWarmup:    r.isWarmup,
+      isPR:        r.isPR,
+      completedAt: r.completedAt,
     })),
-    bodyStats: (bodyStats.data ?? []).map((r) => ({
+    bodyStats: bodyStats.map((r) => ({
       id:       r.id,
       date:     r.date,
-      weightKg: r.weight_kg,
-      waistCm:  r.waist_cm,
-      chestCm:  r.chest_cm,
+      weightKg: r.weightKg,
+      waistCm:  r.waistCm,
+      chestCm:  r.chestCm,
       notes:    r.notes,
     })),
-    exercisePrefs: (exercisePrefs.data ?? []).map((r) => ({
-      exerciseId:       r.exercise_id,
-      startingWeightKg: r.starting_weight_kg,
-      startingReps:     r.starting_reps,
+    exercisePrefs: exercisePrefs.map((r) => ({
+      exerciseId:       r.exerciseId,
+      startingWeightKg: r.startingWeightKg,
+      startingReps:     r.startingReps,
     })),
-    templateExercises: (templateExercises.data ?? []).map((r) => ({
-      id:             r.id,
-      templateId:     r.template_id,
-      exerciseId:     r.exercise_id,
-      position:       r.position,
-      sets:           r.sets,
-      repRangeMin:    r.rep_range_min,
-      repRangeMax:    r.rep_range_max,
-      isSuperset:     r.is_superset,
-      supersetGroupId:r.superset_group_id,
+    templateExercises: templateExercises.map((r) => ({
+      id:              r.id,
+      templateId:      r.templateId,
+      exerciseId:      r.exerciseId,
+      position:        r.position,
+      sets:            r.sets,
+      repRangeMin:     r.repRangeMin,
+      repRangeMax:     r.repRangeMax,
+      isSuperset:      r.isSuperset,
+      supersetGroupId: r.supersetGroupId,
     })),
-    templateStretches: (templateStretches.data ?? []).map((r) => ({
+    templateStretches: templateStretches.map((r) => ({
       id:          r.id,
-      templateId:  r.template_id,
-      exerciseId:  r.exercise_id,
+      templateId:  r.templateId,
+      exerciseId:  r.exerciseId,
       phase:       r.phase,
       position:    r.position,
-      restSeconds: r.rest_seconds,
+      restSeconds: r.restSeconds,
     })),
-    customExercises: (customExercises.data ?? []).map((r) => ({
+    customExercises: customExercises.map((r) => ({
       id:               r.id,
       name:             r.name,
       category:         r.category,
       type:             r.type,
       muscles:          r.muscles,
-      defaultRepRange:  r.default_rep_range,
-      startingWeightKg: r.starting_weight_kg,
-      restSeconds:      r.rest_seconds,
-      isBodyweight:     r.is_bodyweight,
-      isCable:          r.is_cable,
-      isTimed:          r.is_timed,
-      isStretch:        r.is_stretch,
-      videoUrl:         r.video_url,
+      defaultRepRange:  r.defaultRepRange,
+      startingWeightKg: r.startingWeightKg,
+      restSeconds:      r.restSeconds,
+      isBodyweight:     r.isBodyweight,
+      isCable:          r.isCable,
+      isTimed:          r.isTimed,
+      isStretch:        r.isStretch,
+      videoUrl:         r.videoUrl,
       notes:            r.notes,
     })),
   };
