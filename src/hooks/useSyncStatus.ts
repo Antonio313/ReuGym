@@ -4,7 +4,7 @@ import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { syncAll } from '@/lib/sync';
 
-export type SyncStatus = 'synced' | 'syncing' | 'offline' | 'error';
+export type SyncStatus = 'synced' | 'syncing' | 'pending' | 'offline' | 'error';
 
 export function useSyncStatus(): { status: SyncStatus; retry: () => void } {
   const user = getLocalSession();
@@ -55,7 +55,7 @@ export function useSyncStatus(): { status: SyncStatus; retry: () => void } {
   if (!isOnline)             status = 'offline';
   else if (syncing)          status = 'syncing';
   else if (hasError || failedOps > 0) status = 'error';
-  else if (pendingOps > 0)   status = 'syncing';
+  else if (pendingOps > 0)   status = 'pending';
 
   return { status, retry };
 }

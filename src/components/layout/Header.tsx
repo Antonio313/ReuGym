@@ -15,17 +15,21 @@ function SyncDot() {
     synced:  'transparent',
     offline: 'var(--color-text-muted)',
     syncing: 'var(--color-accent)',
+    pending: 'var(--color-accent)',
     error:   'var(--color-regression)',
   };
 
   if (status === 'synced') return null;
 
+  const clickable = status === 'error' || status === 'pending';
+
   return (
     <button
-      onClick={status === 'error' ? () => void retry() : undefined}
+      onClick={clickable ? () => void retry() : undefined}
       title={
         status === 'offline' ? 'Offline — changes saved locally' :
         status === 'syncing' ? 'Syncing…' :
+        status === 'pending' ? 'Changes waiting to sync — tap to retry' :
         'Sync error — tap to retry'
       }
       style={{
@@ -35,7 +39,7 @@ function SyncDot() {
         background: colors[status],
         border: 'none',
         padding: 0,
-        cursor: status === 'error' ? 'pointer' : 'default',
+        cursor: clickable ? 'pointer' : 'default',
         animation: status === 'syncing' ? 'pulse 1.2s ease-in-out infinite' : 'none',
         flexShrink: 0,
       }}
