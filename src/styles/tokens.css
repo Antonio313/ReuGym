@@ -9,8 +9,19 @@
   --color-border:       #2A2A2A;
   --color-border-hover: #3A3A3A;
   --color-text:         #F5F5F0;
-  --color-muted:        #888880;
-  --color-faint:        #444440;
+  /* muted/faint were #888880/#444440 (~5.5:1 / ~2:1 contrast on --color-bg).
+     Both bumped brighter: most of this text (rep ranges, rest times, dates,
+     exercise counts) renders at 11-13px, well below the size WCAG's 4.5:1
+     AA floor assumes, so passing-on-paper wasn't reading as legible in
+     practice. New values land around 8.5:1 / 6:1 — same warm-grey hue and
+     two-tier hierarchy, comfortably readable at small sizes. */
+  --color-muted:        #AAAAA0;
+  --color-faint:        #8E8E86;
+  /* Aliases: the app overwhelmingly references --color-text-muted / --color-text-faint
+     (248 usages across components) rather than the short names above. Defined here
+     so those references actually resolve instead of silently no-op'ing. */
+  --color-text-muted:   var(--color-muted);
+  --color-text-faint:   var(--color-faint);
   --color-accent:       #FF4D00;
   --color-pr:           #FF4D00;
   --color-match:        #F5F5F0;

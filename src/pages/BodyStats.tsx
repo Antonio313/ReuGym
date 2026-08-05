@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
-import { Plus, TrendDown, TrendUp } from '@phosphor-icons/react';
+import { Plus, TrendDown, TrendUp, Image as ImageIcon, X } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
+import { ProgressPhotoGrid } from '@/components/stats/ProgressPhotoGrid';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { enqueueSync } from '@/lib/sync';
+import { uploadProgressPhoto } from '@/lib/photos';
 import type { BodyStat } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -103,12 +105,43 @@ function LogForm({
   const [chestStr, setChestStr] = useState(latest?.chestCm?.toString() ?? '');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+
+  const [photos, setPhotos] = useState<{ file: File; previewUrl: string }[]>([]);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const onOnline = () => setIsOnline(true);
+    const onOffline = () => setIsOnline(false);
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+      photos.forEach((p) => URL.revokeObjectURL(p.previewUrl));
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const handlePickPhotos = (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const next = Array.from(files).map((file) => ({ file, previewUrl: URL.createObjectURL(file) }));
+    setPhotos((prev) => [...prev, ...next]);
+  };
+
+  const removePhoto = (index: number) => {
+    setPhotos((prev) => {
+      URL.revokeObjectURL(prev[index].previewUrl);
+      return prev.filter((_, i) => i !== index);
+    });
+  };
 
   const handleSave = async () => {
     const lbs = parseFloat(weightLbsStr);
     if (!weightLbsStr || isNaN(lbs)) return;
 
     setSaving(true);
+    setUploadError(null);
     const entry: BodyStat = {
       id: nanoid(),
       date: startOfToday(),
@@ -119,16 +152,27 @@ function LogForm({
     };
     const user = getLocalSession();
     if (user) {
+      let photoPaths: string[] = [];
+      if (photos.length > 0) {
+        try {
+          photoPaths = await Promise.all(photos.map((p) => uploadProgressPhoto(user.id, entry.id, p.file)));
+        } catch {
+          setUploadError('Photo upload failed — entry saved without photos.');
+        }
+      }
+      entry.photoPaths = photoPaths;
+
       const db = getDB(user.id);
-      await db.bodyStats.put({ ...entry, userId: user.id });
+      await db.bodyStats.put({ ...entry, userId: user.id, photoPaths });
       await enqueueSync(user.id, 'body_stats', 'upsert', {
-        id:        entry.id,
-        user_id:   user.id,
-        date:      entry.date,
-        weight_kg: entry.weightKg ?? null,
-        waist_cm:  entry.waistCm ?? null,
-        chest_cm:  entry.chestCm ?? null,
-        notes:     entry.notes ?? null,
+        id:          entry.id,
+        user_id:     user.id,
+        date:        entry.date,
+        weight_kg:   entry.weightKg ?? null,
+        waist_cm:    entry.waistCm ?? null,
+        chest_cm:    entry.chestCm ?? null,
+        notes:       entry.notes ?? null,
+        photo_paths: photoPaths,
       });
     }
     setSaving(false);
@@ -224,6 +268,69 @@ function LogForm({
         />
       </div>
 
+      {/* Progress photo */}
+      <div>
+        <p className="font-body mb-1" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
+          Progress photo
+        </p>
+        {isOnline ? (
+          <>
+            <div className="flex gap-2 flex-wrap">
+              {photos.map((p, i) => (
+                <div key={p.previewUrl} className="relative" style={{ width: '4.5rem', height: '4.5rem' }}>
+                  <img
+                    src={p.previewUrl}
+                    alt=""
+                    className="w-full h-full object-cover"
+                    style={{ borderRadius: 'var(--radius-md)', border: 'var(--border-thin)' }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removePhoto(i)}
+                    aria-label="Remove photo"
+                    className="absolute flex items-center justify-center"
+                    style={{
+                      top: '-6px', right: '-6px', width: '1.25rem', height: '1.25rem',
+                      background: 'var(--color-regression)', borderRadius: '50%', color: '#fff',
+                    }}
+                  >
+                    <X size={12} weight="bold" />
+                  </button>
+                </div>
+              ))}
+              <label
+                className="flex flex-col items-center justify-center gap-1 cursor-pointer"
+                style={{
+                  width: '4.5rem', height: '4.5rem',
+                  border: '1px dashed var(--color-border-hover)', borderRadius: 'var(--radius-md)',
+                  color: 'var(--color-text-muted)',
+                }}
+              >
+                <ImageIcon size={18} />
+                <span className="font-body" style={{ fontSize: 'var(--text-micro)' }}>Add</span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => { handlePickPhotos(e.target.files); e.target.value = ''; }}
+                />
+              </label>
+            </div>
+            {uploadError && (
+              <p className="font-body mt-2" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-regression)' }}>
+                {uploadError}
+              </p>
+            )}
+          </>
+        ) : (
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>
+            Connect to the internet to add photos
+          </p>
+        )}
+      </div>
+
       <div className="flex gap-3">
         <button
           onClick={handleSave}
@@ -275,12 +382,13 @@ export default function BodyStats() {
       .then((rows) => {
         rows.sort((a, b) => b.date - a.date);
         setStats(rows.map((r) => ({
-          id:       r.id,
-          date:     r.date,
-          weightKg: r.weightKg,
-          waistCm:  r.waistCm,
-          chestCm:  r.chestCm,
-          notes:    r.notes,
+          id:         r.id,
+          date:       r.date,
+          weightKg:   r.weightKg,
+          waistCm:    r.waistCm,
+          chestCm:    r.chestCm,
+          notes:      r.notes,
+          photoPaths: r.photoPaths,
         })));
       });
   }, [refreshToken]);
@@ -395,6 +503,16 @@ export default function BodyStats() {
               Weight Trend
             </p>
             <WeightChart stats={chronological} />
+          </div>
+        )}
+
+        {/* Progress photos */}
+        {!loading && stats && stats.some((s) => (s.photoPaths?.length ?? 0) > 0) && (
+          <div className="py-5" style={{ borderBottom: 'var(--border-thin)' }}>
+            <p className="font-body uppercase tracking-widest mb-3" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
+              Progress Photos
+            </p>
+            <ProgressPhotoGrid stats={stats} />
           </div>
         )}
 

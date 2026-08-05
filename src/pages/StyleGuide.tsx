@@ -1,9 +1,22 @@
+import { useState } from 'react';
+import { motion } from 'motion/react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { EmptyState } from '@/components/shared/EmptyState';
 import { SkeletonCard } from '@/components/shared/SkeletonCard';
+import { NumericKeypad } from '@/components/shared/NumericKeypad';
+import { PRBadge } from '@/components/workout/PRBadge';
 import { Trophy, Barbell } from '@phosphor-icons/react';
+
+const motionTokens: Array<{ name: string; var: string; value: string }> = [
+  { name: 'duration-fast',  var: '--duration-fast',  value: '120ms' },
+  { name: 'duration-base',  var: '--duration-base',  value: '200ms' },
+  { name: 'duration-slow',  var: '--duration-slow',  value: '350ms' },
+  { name: 'ease-snap',      var: '--ease-snap',      value: 'cubic-bezier(0.32, 0.72, 0, 1)' },
+  { name: 'ease-out',       var: '--ease-out',       value: 'cubic-bezier(0, 0, 0.2, 1)' },
+  { name: 'ease-spring',    var: '--ease-spring',    value: 'cubic-bezier(0.34, 1.56, 0.64, 1)' },
+];
 
 const colors: Array<{ name: string; var: string; hex: string }> = [
   { name: 'bg',         var: '--color-bg',         hex: '#0A0A0A' },
@@ -11,8 +24,8 @@ const colors: Array<{ name: string; var: string; hex: string }> = [
   { name: 'surface-2',  var: '--color-surface-2',   hex: '#242424' },
   { name: 'border',     var: '--color-border',      hex: '#2A2A2A' },
   { name: 'text',       var: '--color-text',        hex: '#F5F5F0' },
-  { name: 'muted',      var: '--color-muted',       hex: '#888880' },
-  { name: 'faint',      var: '--color-faint',       hex: '#444440' },
+  { name: 'muted',      var: '--color-muted',       hex: '#AAAAA0' },
+  { name: 'faint',      var: '--color-faint',       hex: '#8E8E86' },
   { name: 'accent',     var: '--color-accent',      hex: '#FF4D00' },
   { name: 'success',    var: '--color-success',     hex: '#4DFF91' },
   { name: 'regression', var: '--color-regression',  hex: '#FF4D4D' },
@@ -33,6 +46,10 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 }
 
 export default function StyleGuide() {
+  const [keypadValue, setKeypadValue] = useState('80');
+  const [prShown, setPrShown] = useState(false);
+  const [springed, setSpringed] = useState(false);
+
   return (
     <div
       className="mx-auto flex flex-col gap-10 px-4 py-8"
@@ -264,46 +281,63 @@ export default function StyleGuide() {
         <SkeletonCard height="6rem" />
       </Section>
 
-      {/* Numeric Keypad Placeholder */}
-      <Section title="Numeric Keypad (placeholder)">
-        <div
-          className="flex flex-col items-center gap-2 p-4"
-          style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)' }}
-        >
-          <div
-            className="font-mono w-full text-right"
-            data-numeric
-            style={{
-              fontSize: 'var(--text-weight-large)',
-              color: 'var(--color-text)',
-              padding: '0.5rem',
-              borderBottom: 'var(--border-accent)',
-              marginBottom: '0.5rem',
-            }}
-          >
-            80
+      {/* Numeric Keypad */}
+      <Section title="Numeric Keypad">
+        <div style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
+          <NumericKeypad
+            value={keypadValue}
+            onChange={setKeypadValue}
+            decimal
+            onDone={() => {}}
+          />
+        </div>
+      </Section>
+
+      {/* Motion */}
+      <Section title="Motion">
+        <div className="grid grid-cols-2 gap-2 mb-4">
+          {motionTokens.map(({ name, value }) => (
+            <div key={name} className="rounded p-2" style={{ background: 'var(--color-surface)' }}>
+              <p style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text)', fontFamily: 'var(--font-mono)' }}>
+                {name}
+              </p>
+              <p style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', fontFamily: 'var(--font-mono)' }}>
+                {value}
+              </p>
+            </div>
+          ))}
+        </div>
+
+        <div className="flex items-center gap-6 p-4" style={{ background: 'var(--color-surface)', borderRadius: 'var(--radius-md)' }}>
+          {/* PR celebration — the one deliberately bold moment in the app */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => { setPrShown(false); requestAnimationFrame(() => setPrShown(true)); }}
+              className="font-body px-3 py-1.5"
+              style={{ fontSize: 'var(--text-meta)', color: 'var(--color-accent)', border: '1px solid var(--color-accent)', borderRadius: 'var(--radius-sm)' }}
+            >
+              Trigger PR
+            </button>
+            <div style={{ height: '1.5rem' }}>
+              <PRBadge show={prShown} />
+            </div>
           </div>
-          <div className="grid w-full grid-cols-3 gap-2">
-            {['1','2','3','4','5','6','7','8','9','⌫','0','✓'].map((key) => (
-              <button
-                key={key}
-                className="font-body font-medium"
-                style={{
-                  padding: '0.75rem',
-                  background: key === '✓' ? 'var(--color-accent)' : 'var(--color-surface-2)',
-                  color: key === '✓' ? '#fff' : 'var(--color-text)',
-                  borderRadius: 'var(--radius-sm)',
-                  fontSize: 'var(--text-h3)',
-                  border: 'none',
-                }}
-              >
-                {key}
-              </button>
-            ))}
+
+          {/* ease-spring demo */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={() => setSpringed((s) => !s)}
+              className="font-body px-3 py-1.5"
+              style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', border: 'var(--border-thin)', borderRadius: 'var(--radius-sm)' }}
+            >
+              ease-spring
+            </button>
+            <motion.div
+              animate={{ scale: springed ? 1.3 : 1 }}
+              transition={{ type: 'spring', stiffness: 350, damping: 14 }}
+              style={{ width: '1.5rem', height: '1.5rem', borderRadius: '50%', background: 'var(--color-accent)' }}
+            />
           </div>
-          <p style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', marginTop: '0.5rem' }}>
-            Full implementation in Phase 2
-          </p>
         </div>
       </Section>
 

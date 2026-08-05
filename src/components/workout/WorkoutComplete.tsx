@@ -1,3 +1,5 @@
+import { motion, useReducedMotion, type Variants } from 'motion/react';
+
 export type CompletionStats = {
   durationSeconds: number;
   exercisesCompleted: number;
@@ -21,13 +23,27 @@ function formatDuration(seconds: number): string {
 }
 
 export function WorkoutComplete({ stats, onHome }: Props) {
+  const reduceMotion = useReducedMotion();
+
+  const container: Variants = {
+    hidden: {},
+    visible: { transition: { staggerChildren: reduceMotion ? 0 : 0.08, delayChildren: reduceMotion ? 0 : 0.05 } },
+  };
+  const item: Variants = {
+    hidden: reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.35, ease: [0, 0, 0.2, 1] } },
+  };
+
   return (
-    <div
+    <motion.div
       className="flex flex-col min-h-dvh mx-auto px-4 py-8 gap-8 items-center justify-center"
       style={{ maxWidth: 'var(--max-content-width)', background: 'var(--color-bg)' }}
+      variants={container}
+      initial="hidden"
+      animate="visible"
     >
       {/* Title */}
-      <div className="text-center">
+      <motion.div className="text-center" variants={item}>
         <p
           className="font-body uppercase tracking-widest mb-2"
           style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
@@ -56,10 +72,10 @@ export function WorkoutComplete({ stats, onHome }: Props) {
         >
           COMPLETE
         </h1>
-      </div>
+      </motion.div>
 
       {/* Duration */}
-      <div className="text-center">
+      <motion.div className="text-center" variants={item}>
         <span
           className="font-mono"
           data-numeric
@@ -67,12 +83,10 @@ export function WorkoutComplete({ stats, onHome }: Props) {
         >
           {formatDuration(stats.durationSeconds)}
         </span>
-      </div>
+      </motion.div>
 
       {/* Stats grid */}
-      <div
-        className="w-full grid grid-cols-2 gap-3"
-      >
+      <motion.div className="w-full grid grid-cols-2 gap-3" variants={item}>
         <StatCard label="Exercises" value={String(stats.exercisesCompleted)} />
         <StatCard label="Sets" value={String(stats.totalSets)} />
         <StatCard
@@ -84,12 +98,14 @@ export function WorkoutComplete({ stats, onHome }: Props) {
           label="Volume"
           value={`${stats.totalVolumeKg.toLocaleString()}kg`}
         />
-      </div>
+      </motion.div>
 
       {/* Home button */}
-      <button
+      <motion.button
         type="button"
         onClick={onHome}
+        variants={item}
+        whileTap={reduceMotion ? undefined : { scale: 0.97 }}
         className="w-full py-4 font-display uppercase tracking-wide"
         style={{
           fontSize: 'var(--text-h2)',
@@ -101,8 +117,8 @@ export function WorkoutComplete({ stats, onHome }: Props) {
         }}
       >
         Home
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   );
 }
 

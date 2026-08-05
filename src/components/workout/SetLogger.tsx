@@ -10,7 +10,8 @@ import { haptics } from '@/lib/haptics';
 import { playSetLogged } from '@/lib/audio';
 import { NumericKeypad } from '@/components/shared/NumericKeypad';
 import { VideoReference } from '@/components/workout/VideoReference';
-import { snapToNearestDumbbell } from '@/lib/weights';
+import { PRBadge } from '@/components/workout/PRBadge';
+import { snapToNearestDumbbell, resolveStartingWeight } from '@/lib/weights';
 import type { TemplateExercise, Exercise, ActiveSet } from '@/types';
 
 type Props = {
@@ -72,13 +73,10 @@ export function SetLogger({
     }
   }, [exercise.id, setNumber]);
 
-  // Default weight: lastData → max(pref, template) → snap to dumbbell
-  // Using max ensures template config acts as a floor; prefs only override upward.
-  const defaultWeightKg = snapToNearestDumbbell(
-    lastData?.weightKg != null
-      ? lastData.weightKg
-      : Math.max(exercisePref?.startingWeightKg ?? 0, templateExercise.startingWeightKg),
-  );
+  // Default weight: lastData → resolveStartingWeight(template, pref) → snap to dumbbell
+  const defaultWeightKg = lastData?.weightKg != null
+    ? snapToNearestDumbbell(lastData.weightKg)
+    : resolveStartingWeight(templateExercise.startingWeightKg, exercisePref?.startingWeightKg);
 
   // Default reps: lastData → max(pref, template lower bound)
   const defaultReps =
@@ -282,19 +280,7 @@ export function SetLogger({
               Starting defaults shown
             </p>
           ) : null}
-          {justLoggedPR && (
-            <span
-              className="font-body font-medium uppercase tracking-widest px-2 py-0.5"
-              style={{
-                fontSize: 'var(--text-micro)',
-                background: 'var(--color-accent)',
-                color: '#fff',
-                borderRadius: 'var(--radius-sm)',
-              }}
-            >
-              PR!
-            </span>
-          )}
+          <PRBadge show={justLoggedPR} />
         </div>
 
         {/* Weight field (hidden for pure bodyweight exercises) */}

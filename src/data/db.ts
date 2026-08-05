@@ -35,6 +35,7 @@ export type DexieBodyStat = {
   waistCm?: number;
   chestCm?: number;
   notes?: string;
+  photoPaths: string[];
 };
 
 // exercise_prefs has no id — compound PK [userId+exerciseId]
@@ -218,13 +219,14 @@ export function rowToSession(r: Row, userId: string): DexieSession {
 
 export function rowToBodyStat(r: Row, userId: string): DexieBodyStat {
   return {
-    id:       r.id as string,
+    id:         r.id as string,
     userId,
-    date:     r.date as number,
-    weightKg: r.weight_kg as number | undefined,
-    waistCm:  r.waist_cm as number | undefined,
-    chestCm:  r.chest_cm as number | undefined,
-    notes:    r.notes as string | undefined,
+    date:       r.date as number,
+    weightKg:   r.weight_kg as number | undefined,
+    waistCm:    r.waist_cm as number | undefined,
+    chestCm:    r.chest_cm as number | undefined,
+    notes:      r.notes as string | undefined,
+    photoPaths: (r.photo_paths as string[] | null) ?? [],
   };
 }
 

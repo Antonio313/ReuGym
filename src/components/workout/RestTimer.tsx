@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from 'motion/react';
 import { VideoReference } from '@/components/workout/VideoReference';
 import type { Exercise } from '@/types';
 
@@ -19,6 +20,8 @@ function formatTime(seconds: number): string {
 
 export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExercise, nextTargetWeight, nextTargetReps, onSkip }: Props) {
   const progress = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
+  const reduceMotion = useReducedMotion();
+  const urgent = secondsRemaining <= 5 && secondsRemaining > 0;
 
   return (
     <div
@@ -54,19 +57,25 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExerc
         />
       </div>
 
-      {/* Countdown */}
-      <span
+      {/* Countdown — a fresh element each tick gives the number a subtle pulse-in,
+          stronger in the final few seconds; skipped entirely for reduced-motion. */}
+      <motion.span
+        key={secondsRemaining}
         className="font-mono"
         data-numeric
+        initial={reduceMotion ? false : { scale: urgent ? 1.18 : 1.06, opacity: 0.6 }}
+        animate={{ scale: 1, opacity: 1 }}
+        transition={{ duration: 0.2, ease: [0, 0, 0.2, 1] }}
         style={{
           fontSize: 'clamp(3rem, 15vw, 6rem)',
-          color: secondsRemaining <= 5 ? 'var(--color-accent)' : 'var(--color-text)',
+          color: urgent ? 'var(--color-accent)' : 'var(--color-text)',
           lineHeight: 1,
-          transition: 'color 300ms',
+          transition: 'color var(--duration-base) var(--ease-out)',
+          display: 'inline-block',
         }}
       >
         {formatTime(secondsRemaining)}
-      </span>
+      </motion.span>
 
       {/* Next set label + exercise details */}
       <div className="text-center w-full">
@@ -105,9 +114,11 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExerc
       </div>
 
       {/* Skip */}
-      <button
+      <motion.button
         type="button"
         onClick={onSkip}
+        whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+        transition={{ duration: 0.12, ease: [0.32, 0.72, 0, 1] }}
         className="font-body px-8 py-3"
         style={{
           fontSize: 'var(--text-body)',
@@ -118,7 +129,7 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExerc
         }}
       >
         Skip
-      </button>
+      </motion.button>
     </div>
   );
 }

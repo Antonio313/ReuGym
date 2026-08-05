@@ -53,12 +53,13 @@ export async function exportData(userId: string): Promise<void> {
       completedAt: r.completedAt,
     })),
     bodyStats: bodyStats.map((r) => ({
-      id:       r.id,
-      date:     r.date,
-      weightKg: r.weightKg,
-      waistCm:  r.waistCm,
-      chestCm:  r.chestCm,
-      notes:    r.notes,
+      id:         r.id,
+      date:       r.date,
+      weightKg:   r.weightKg,
+      waistCm:    r.waistCm,
+      chestCm:    r.chestCm,
+      notes:      r.notes,
+      photoPaths: r.photoPaths,
     })),
     exercisePrefs: exercisePrefs.map((r) => ({
       exerciseId:       r.exerciseId,
@@ -200,13 +201,14 @@ async function upsertAll(
   })));
 
   await batchUpsert('body_stats', bodyStats.map((s) => ({
-    id:        s.id,
-    user_id:   userId,
-    date:      s.date,
-    weight_kg: s.weightKg ?? null,
-    waist_cm:  s.waistCm ?? null,
-    chest_cm:  s.chestCm ?? null,
-    notes:     s.notes ?? null,
+    id:          s.id,
+    user_id:     userId,
+    date:        s.date,
+    weight_kg:   s.weightKg ?? null,
+    waist_cm:    s.waistCm ?? null,
+    chest_cm:    s.chestCm ?? null,
+    notes:       s.notes ?? null,
+    photo_paths: s.photoPaths ?? [],
   })));
 
   await batchUpsert('exercise_prefs', exercisePrefs.map((p) => ({

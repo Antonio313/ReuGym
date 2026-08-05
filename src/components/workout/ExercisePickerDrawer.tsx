@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Plus } from '@phosphor-icons/react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
@@ -28,6 +29,11 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, retu
   const navigate = useNavigate();
   const allExercises = useExercises().filter((e) => !e.isStretch);
   const excludeSet = new Set(excludeIds);
+  const [search, setSearch] = useState('');
+
+  const filtered = search.trim()
+    ? allExercises.filter((e) => e.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : allExercises;
 
   const handleCreate = () => {
     onClose();
@@ -50,6 +56,23 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, retu
           </DrawerTitle>
         </DrawerHeader>
 
+        {/* Search */}
+        <div className="px-4 pb-2">
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search exercises…"
+            className="w-full px-3 py-2 rounded-md font-body"
+            style={{
+              background: 'var(--color-surface-2)',
+              border: 'var(--border-thin)',
+              color: 'var(--color-text)',
+              fontSize: 'var(--text-body)',
+              outline: 'none',
+            }}
+          />
+        </div>
+
         <div className="overflow-y-auto px-4 pb-8">
           {/* Create new exercise shortcut */}
           <button
@@ -69,66 +92,83 @@ export function ExercisePickerDrawer({ open, onClose, onSelect, excludeIds, retu
             </span>
           </button>
 
-          {CATEGORY_ORDER.map((cat) => {
-            const catExercises = allExercises.filter((e) => e.category === cat);
-            if (catExercises.length === 0) return null;
-            return (
-              <div key={cat} className="mb-6">
-                <p
-                  className="font-body font-medium uppercase tracking-widest mb-2 sticky top-0 py-1"
-                  style={{
-                    fontSize: 'var(--text-micro)',
-                    color: 'var(--color-accent)',
-                    background: 'var(--color-surface)',
-                  }}
-                >
-                  {CATEGORY_LABELS[cat]}
-                </p>
-                {catExercises.map((ex) => {
-                  const already = excludeSet.has(ex.id);
-                  return (
-                    <button
-                      key={ex.id}
-                      disabled={already}
-                      onClick={() => {
-                        onSelect(ex.id);
-                        onClose();
-                      }}
-                      className="flex w-full items-center justify-between py-3 text-left"
-                      style={{ borderBottom: 'var(--border-thin)', opacity: already ? 0.35 : 1 }}
-                    >
-                      <span>
-                        <span
-                          className="font-body block"
-                          style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}
-                        >
-                          {ex.name}
-                        </span>
-                        <span
-                          className="font-mono"
-                          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-                        >
-                          {ex.defaultRepRange ? `${ex.defaultRepRange[0]}–${ex.defaultRepRange[1]} reps` : ''}
-                          {ex.isBodyweight ? ' · Bodyweight' : ex.startingWeightKg ? ` · ${ex.startingWeightKg}kg start` : ''}
-                          {ex.notes ? ` · ${ex.notes}` : ''}
-                        </span>
-                      </span>
-                      {already && (
-                        <span
-                          className="font-body uppercase"
-                          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}
-                        >
-                          Added
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
-            );
-          })}
+          {search.trim() ? (
+            filtered.length === 0 ? (
+              <p className="px-1 py-8 text-center font-body" style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-body)' }}>
+                No exercises found
+              </p>
+            ) : (
+              filtered.map((ex) => (
+                <ExerciseRow key={ex.id} exercise={ex} already={excludeSet.has(ex.id)} onSelect={() => { onSelect(ex.id); onClose(); }} />
+              ))
+            )
+          ) : (
+            CATEGORY_ORDER.map((cat) => {
+              const catExercises = allExercises.filter((e) => e.category === cat);
+              if (catExercises.length === 0) return null;
+              return (
+                <div key={cat} className="mb-6">
+                  <p
+                    className="font-body font-medium uppercase tracking-widest mb-2 sticky top-0 py-1"
+                    style={{
+                      fontSize: 'var(--text-micro)',
+                      color: 'var(--color-accent)',
+                      background: 'var(--color-surface)',
+                    }}
+                  >
+                    {CATEGORY_LABELS[cat]}
+                  </p>
+                  {catExercises.map((ex) => (
+                    <ExerciseRow key={ex.id} exercise={ex} already={excludeSet.has(ex.id)} onSelect={() => { onSelect(ex.id); onClose(); }} />
+                  ))}
+                </div>
+              );
+            })
+          )}
         </div>
       </DrawerContent>
     </Drawer>
+  );
+}
+
+function ExerciseRow({
+  exercise, already, onSelect,
+}: {
+  exercise: ReturnType<typeof useExercises>[number];
+  already: boolean;
+  onSelect: () => void;
+}) {
+  return (
+    <button
+      disabled={already}
+      onClick={onSelect}
+      className="flex w-full items-center justify-between py-3 text-left"
+      style={{ borderBottom: 'var(--border-thin)', opacity: already ? 0.35 : 1 }}
+    >
+      <span>
+        <span
+          className="font-body block"
+          style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}
+        >
+          {exercise.name}
+        </span>
+        <span
+          className="font-mono"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+        >
+          {exercise.defaultRepRange ? `${exercise.defaultRepRange[0]}–${exercise.defaultRepRange[1]} reps` : ''}
+          {exercise.isBodyweight ? ' · Bodyweight' : exercise.startingWeightKg ? ` · ${exercise.startingWeightKg}kg start` : ''}
+          {exercise.notes ? ` · ${exercise.notes}` : ''}
+        </span>
+      </span>
+      {already && (
+        <span
+          className="font-body uppercase"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}
+        >
+          Added
+        </span>
+      )}
+    </button>
   );
 }

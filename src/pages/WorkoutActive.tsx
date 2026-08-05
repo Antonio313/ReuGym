@@ -20,6 +20,7 @@ import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
+import { resolveStartingWeight } from '@/lib/weights';
 import type { ActiveSet, Exercise, ExercisePref, SubstituteConfig } from '@/types';
 
 type WorkoutPhase = 'preview' | 'pre-stretch' | 'workout' | 'post-stretch' | 'complete';
@@ -73,6 +74,12 @@ export default function WorkoutActive() {
   useEffect(() => {
     loadAllPrefs().then(setPrefsMap);
   }, []);
+
+  // Keeps "upcoming" weight previews (rest screen, feeling meter) in sync with
+  // the same pref-aware value SetLogger actually defaults to — templateExercise
+  // .startingWeightKg alone goes stale as your working weight climbs.
+  const targetWeightFor = (te: { exerciseId: string; startingWeightKg: number }) =>
+    resolveStartingWeight(te.startingWeightKg, prefsMap.get(te.exerciseId)?.startingWeightKg);
 
   const store = useWorkoutStore();
   const {
@@ -291,7 +298,7 @@ export default function WorkoutActive() {
       setRestNextExercise(partnerEx ?? null);
       if (partnerEx) {
         setRestNextTarget({
-          weight: nextTE.isBodyweight ? null : nextTE.startingWeightKg,
+          weight: nextTE.isBodyweight ? null : targetWeightFor(nextTE),
           reps: nextTE.repRange,
         });
       } else {
@@ -313,7 +320,7 @@ export default function WorkoutActive() {
         setRestNextExercise(partnerExerciseA ?? null);
         if (partnerExerciseA) {
           setRestNextTarget({
-            weight: prevTE.isBodyweight ? null : prevTE.startingWeightKg,
+            weight: prevTE.isBodyweight ? null : targetWeightFor(prevTE),
             reps: prevTE.repRange,
           });
         } else {
@@ -330,7 +337,7 @@ export default function WorkoutActive() {
           queueEntries.push({
             exerciseId: partnerExerciseA.id,
             exercise: partnerExerciseA,
-            startingWeightKg: prevTE.startingWeightKg,
+            startingWeightKg: targetWeightFor(prevTE),
             startingReps: prefA?.startingReps ?? prevTE.repRange[0],
             sessionId: sid,
           });
@@ -340,7 +347,7 @@ export default function WorkoutActive() {
           queueEntries.push({
             exerciseId: partnerExerciseB.id,
             exercise: partnerExerciseB,
-            startingWeightKg: currTE.startingWeightKg,
+            startingWeightKg: targetWeightFor(currTE),
             startingReps: prefB?.startingReps ?? currTE.repRange[0],
             sessionId: sid,
           });
@@ -357,7 +364,7 @@ export default function WorkoutActive() {
           setRestNextExercise(nextEx ?? null);
           if (nextEx) {
             setRestNextTarget({
-              weight: nextNonSupersetEx.isBodyweight ? null : nextNonSupersetEx.startingWeightKg,
+              weight: nextNonSupersetEx.isBodyweight ? null : targetWeightFor(nextNonSupersetEx),
               reps: nextNonSupersetEx.repRange,
             });
           } else {
@@ -372,7 +379,7 @@ export default function WorkoutActive() {
           setRestNextExercise(nextEx ?? null);
           if (nextEx) {
             setRestNextTarget({
-              weight: firstSkippedTE.isBodyweight ? null : firstSkippedTE.startingWeightKg,
+              weight: firstSkippedTE.isBodyweight ? null : targetWeightFor(firstSkippedTE),
               reps: firstSkippedTE.repRange,
             });
           } else {
@@ -423,7 +430,7 @@ export default function WorkoutActive() {
       setRestNextExercise(currEx ?? null);
       if (currEx) {
         setRestNextTarget({
-          weight: currTE.isBodyweight ? null : currTE.startingWeightKg,
+          weight: currTE.isBodyweight ? null : targetWeightFor(currTE),
           reps: currTE.repRange,
         });
       } else {
@@ -435,7 +442,7 @@ export default function WorkoutActive() {
       setRestNextExercise(nextEx ?? null);
       if (nextEx) {
         setRestNextTarget({
-          weight: nextTeEntry.isBodyweight ? null : nextTeEntry.startingWeightKg,
+          weight: nextTeEntry.isBodyweight ? null : targetWeightFor(nextTeEntry),
           reps: nextTeEntry.repRange,
         });
       } else {
@@ -447,7 +454,7 @@ export default function WorkoutActive() {
       setRestNextExercise(nextEx ?? null);
       if (nextEx) {
         setRestNextTarget({
-          weight: nextSkippedTE.isBodyweight ? null : nextSkippedTE.startingWeightKg,
+          weight: nextSkippedTE.isBodyweight ? null : targetWeightFor(nextSkippedTE),
           reps: nextSkippedTE.repRange,
         });
       } else {
@@ -481,7 +488,7 @@ export default function WorkoutActive() {
         setFeelingQueue([{
           exerciseId: exercise.id,
           exercise,
-          startingWeightKg: currTE.startingWeightKg,
+          startingWeightKg: targetWeightFor(currTE),
           startingReps: pref?.startingReps ?? currTE.repRange[0],
           sessionId: sessionId ?? '',
         }]);

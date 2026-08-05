@@ -109,6 +109,7 @@ export default function CreateExercise() {
   const returnTo = searchParams.get('returnTo');
   const [saving, setSaving] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [duplicateOf, setDuplicateOf] = useState<{ id: string; name: string } | null>(null);
 
   const isEditMode = exerciseId !== undefined;
   const isStretchParam = searchParams.get('isStretch') === 'true';
@@ -153,6 +154,12 @@ export default function CreateExercise() {
   const selectedMuscles  = watch('muscles');
   const selectedCategory = watch('category');
   const selectedType     = watch('type');
+  const nameValue        = watch('name');
+
+  // Clear a shown duplicate warning as soon as the name changes again
+  useEffect(() => {
+    setDuplicateOf(null);
+  }, [nameValue]);
 
   const toggleMuscle = (muscle: string) => {
     const current = selectedMuscles ?? [];
@@ -164,6 +171,16 @@ export default function CreateExercise() {
   };
 
   const onSubmit = async (data: FormValues) => {
+    if (!isEditMode) {
+      const pool = isStretch ? allStretchExercises : allExercises;
+      const normalized = data.name.trim().toLowerCase();
+      const existing = pool.find((e) => e.name.trim().toLowerCase() === normalized);
+      if (existing) {
+        setDuplicateOf({ id: existing.id, name: existing.name });
+        return;
+      }
+    }
+
     setSaving(true);
     try {
       const exercise = {
@@ -276,6 +293,28 @@ export default function CreateExercise() {
             }}
           />
           <FieldError message={errors.name?.message} />
+          {duplicateOf && (
+            <div
+              className="mt-2 px-3 py-2 flex items-center justify-between gap-3"
+              style={{
+                background: 'var(--color-accent-dim)',
+                border: '1px solid var(--color-accent)',
+                borderRadius: 'var(--radius-md)',
+              }}
+            >
+              <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}>
+                "{duplicateOf.name}" already exists.
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate(`/exercise/${duplicateOf.id}`)}
+                className="font-body font-medium flex-shrink-0"
+                style={{ fontSize: 'var(--text-meta)', color: 'var(--color-accent)' }}
+              >
+                Edit it instead →
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Category */}

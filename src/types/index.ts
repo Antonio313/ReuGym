@@ -101,6 +101,7 @@ export type BodyStat = {
   waistCm?: number;
   chestCm?: number;
   notes?: string;
+  photoPaths?: string[];
 };
 
 // ─── Exercise Preferences ────────────────────────────────────────

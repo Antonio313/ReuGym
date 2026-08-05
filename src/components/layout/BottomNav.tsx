@@ -28,6 +28,7 @@ export function BottomNav() {
           className="flex flex-1 flex-col items-center justify-center gap-0.5"
           style={({ isActive }) => ({
             color: isActive ? 'var(--color-accent)' : 'var(--color-text-muted)',
+            transition: 'color var(--duration-base) var(--ease-out)',
           })}
         >
           <Icon size={22} weight="regular" />

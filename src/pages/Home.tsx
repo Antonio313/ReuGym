@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { motion, useReducedMotion, type Variants } from 'motion/react';
 import { PencilSimple, ChatCircle } from '@phosphor-icons/react';
 import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
@@ -30,13 +31,16 @@ function formatToday(): string {
 type DayCardProps = {
   template: WorkoutTemplate;
   lastSessionDate?: number;
+  variants: Variants;
 };
 
-function DayCard({ template, lastSessionDate }: DayCardProps) {
+function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
 
   return (
-    <div
+    <motion.div
+      variants={variants}
       className="relative flex flex-col gap-2 p-4"
       style={{
         background: 'var(--color-surface)',
@@ -84,8 +88,10 @@ function DayCard({ template, lastSessionDate }: DayCardProps) {
       </span>
 
       {/* Start button */}
-      <button
+      <motion.button
         onClick={() => navigate(`/workout/${template.id}`)}
+        whileTap={reduceMotion ? undefined : { scale: 0.96 }}
+        transition={{ duration: 0.12, ease: [0.32, 0.72, 0, 1] }}
         className="mt-auto self-start font-body font-medium"
         style={{
           fontSize: 'var(--text-meta)',
@@ -99,14 +105,24 @@ function DayCard({ template, lastSessionDate }: DayCardProps) {
         }}
       >
         Start
-      </button>
-    </div>
+      </motion.button>
+    </motion.div>
   );
 }
 
 export default function Home() {
   const isSunday = new Date().getDay() === 0;
   const navigate = useNavigate();
+  const reduceMotion = useReducedMotion();
+
+  const cardContainer: Variants = {
+    hidden: {},
+    visible: { transition: { staggerChildren: reduceMotion ? 0 : 0.06 } },
+  };
+  const cardItem: Variants = {
+    hidden: reduceMotion ? { opacity: 0 } : { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0, 0, 0.2, 1] } },
+  };
 
   const templates = useTemplates();
   const [aiOpen, setAiOpen] = useState(false);
@@ -140,15 +156,21 @@ export default function Home() {
 
       <main className="flex flex-col gap-3 p-4">
         {/* Day cards grid */}
-        <div className="grid grid-cols-2 gap-3">
+        <motion.div
+          className="grid grid-cols-2 gap-3"
+          variants={cardContainer}
+          initial="hidden"
+          animate="visible"
+        >
           {orderedTemplates.map((template) => (
             <DayCard
               key={template.id}
               template={template}
               lastSessionDate={lastSessions[template.id]}
+              variants={cardItem}
             />
           ))}
-        </div>
+        </motion.div>
 
         {/* Sunday body stats CTA */}
         {isSunday && (
@@ -170,9 +192,11 @@ export default function Home() {
       </main>
 
       {/* Floating AI chat button */}
-      <button
+      <motion.button
         onClick={() => setAiOpen(true)}
         aria-label="Open AI assistant"
+        whileTap={reduceMotion ? undefined : { scale: 0.92 }}
+        transition={{ duration: 0.12, ease: [0.32, 0.72, 0, 1] }}
         style={{
           position: 'fixed',
           bottom: 'calc(var(--bottom-nav-height) + 1rem)',
@@ -190,7 +214,7 @@ export default function Home() {
         }}
       >
         <ChatCircle size={22} weight="fill" />
-      </button>
+      </motion.button>
 
       <AIChatDrawer
         open={aiOpen}
