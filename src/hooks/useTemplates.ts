@@ -44,12 +44,16 @@ export function useTemplate(templateId: string): [WorkoutTemplate | undefined, (
 
     rows.sort((a, b) => a.position - b.position);
 
-    // saveTemplate always writes a templateVersions row, even when the
-    // resulting exercise list is empty — its presence is what actually
-    // means "the user has explicitly saved this template," as opposed to
-    // "never customized." Using rows.length alone couldn't tell those apart,
-    // so deleting every exercise silently brought the static defaults back.
-    const exercises = version ? rows.map(dexieToTemplateExercise) : meta.exercises;
+    // templateVersions is a local-only sentinel — initialSync/deltaSync pull
+    // real template_exercises rows down from Supabase but never touch it
+    // (only saveTemplate, resetTemplate, and a *self-originated* queue push
+    // do). So on any device other than the one that last called saveTemplate
+    // — e.g. a fresh login, or a second device pulling changes made
+    // elsewhere — `version` is undefined even though `rows` holds real,
+    // already-synced data. Falling back to meta.exercises in that case would
+    // silently hide the user's saved template behind the (now-empty) static
+    // defaults. Only fall back when there's neither a version *nor* any rows.
+    const exercises = version || rows.length > 0 ? rows.map(dexieToTemplateExercise) : meta.exercises;
     return { ...meta, exercises };
   }, [templateId, user?.id, refreshToken]);
 

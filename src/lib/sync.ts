@@ -1,5 +1,6 @@
 import { nanoid } from 'nanoid';
 import { supabase } from '@/lib/supabase';
+import { getLocalSession } from '@/lib/session';
 import {
   getDB,
   rowToSet,
@@ -209,6 +210,18 @@ const COMPOSITE_KEY_TABLES: Partial<Record<SupabaseTableName, string>> = {
 async function applyOperation(op: SyncOperation, userId: string): Promise<void> {
   if (op.operation === 'upsert') {
     const payload = op.payload as Record<string, unknown>;
+
+    // Self-heal: a `users` upsert enqueued before `email` was required in
+    // this payload shape stays queued with the old (broken) shape until
+    // it's retried — fixing the code that builds new payloads doesn't
+    // rewrite ones already sitting in the queue. Patch it in from the
+    // current session at retry time instead of requiring everyone with a
+    // stale queued op to manually clear their local sync queue.
+    if (op.table === 'users' && payload.email == null) {
+      const session = getLocalSession();
+      if (session) payload.email = session.email;
+    }
+
     const onConflict = COMPOSITE_KEY_TABLES[op.table] ?? 'id';
     const { error } = await supabase.from(op.table).upsert(payload, { onConflict });
     if (error) throw new Error(error.message);

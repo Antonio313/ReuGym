@@ -1,28 +1,10 @@
 import { supabase } from './supabase';
 import { enqueueSync, syncNow } from './sync';
+import { getLocalSession, setLocalSession, clearLocalSession } from './session';
+import type { AuthUser, WeightUnit } from './session';
 
-const SESSION_KEY = 'reugym_session';
-
-export type WeightUnit = 'kg' | 'lbs';
-
-export type AuthUser = { id: string; email: string; weightUnit: WeightUnit; hasSeenOnboarding: boolean };
-
-export function getLocalSession(): AuthUser | null {
-  try {
-    const raw = localStorage.getItem(SESSION_KEY);
-    return raw ? (JSON.parse(raw) as AuthUser) : null;
-  } catch {
-    return null;
-  }
-}
-
-export function setLocalSession(user: AuthUser): void {
-  localStorage.setItem(SESSION_KEY, JSON.stringify(user));
-}
-
-export function clearLocalSession(): void {
-  localStorage.removeItem(SESSION_KEY);
-}
+export { getLocalSession, setLocalSession, clearLocalSession };
+export type { AuthUser, WeightUnit };
 
 export async function signIn(email: string): Promise<AuthUser> {
   const { data, error } = await supabase
