@@ -59,6 +59,16 @@ export default function WorkoutActive() {
   const [isWorkingThroughSkipped, setIsWorkingThroughSkipped] = useState(false);
   const [pendingSkippedIndex, setPendingSkippedIndex] = useState<number | null>(null);
 
+  // Defer-stretch state — mirrors skippedIndices/isWorkingThroughSkipped above,
+  // scoped to whichever stretch list (pre or post) is currently active.
+  const [skippedStretchIndices, setSkippedStretchIndices] = useState<number[]>([]);
+  const [isWorkingThroughSkippedStretches, setIsWorkingThroughSkippedStretches] = useState(false);
+
+  // Outright-skip notes (exercises and stretches) — accumulated through the
+  // whole session (pre-stretch → workout → post-stretch) and persisted onto
+  // the session's `notes` field so a skip is never silently lost.
+  const [skipNotes, setSkipNotes] = useState<string[]>([]);
+
   // Session-only substitute swaps: exerciseIndex → SubstituteConfig
   const [sessionSwaps, setSessionSwaps] = useState<Map<number, SubstituteConfig>>(new Map());
   const [swapSheetOpen, setSwapSheetOpen] = useState(false);
@@ -183,12 +193,26 @@ export default function WorkoutActive() {
   }, [status]);
 
 
+  // Writes whatever's currently in skipNotes onto the session row. Called
+  // standalone after post-stretch (finishWorkout has already saved the
+  // session by then, so there's no other write to piggyback on) and inlined
+  // into finishWorkout's own update for the pre-stretch/workout portion.
+  const persistSessionNotes = async (notes: string) => {
+    if (!sessionId || !notes) return;
+    const user = getLocalSession();
+    if (!user) return;
+    const db = getDB(user.id);
+    await db.sessions.update(sessionId, { notes });
+    await enqueueSync(user.id, 'workout_sessions', 'upsert', { id: sessionId, user_id: user.id, notes });
+  };
+
   const finishWorkout = async () => {
     disableWakeLock();
     const completedAt = Date.now();
     const durationSeconds = sessionStartedAt
       ? Math.round((completedAt - sessionStartedAt) / 1000)
       : 0;
+    const notes = skipNotes.length > 0 ? skipNotes.join(' · ') : undefined;
 
     let stats: CompletionStats = {
       durationSeconds,
@@ -203,7 +227,7 @@ export default function WorkoutActive() {
       const db = getDB(user.id);
 
       // Update session in Dexie then queue the change for Supabase
-      await db.sessions.update(sessionId, { completedAt, durationSeconds });
+      await db.sessions.update(sessionId, { completedAt, durationSeconds, ...(notes ? { notes } : {}) });
       await enqueueSync(user.id, 'workout_sessions', 'upsert', {
         id:               sessionId,
         user_id:          user.id,
@@ -211,6 +235,7 @@ export default function WorkoutActive() {
         started_at:       sessionStartedAt,
         completed_at:     completedAt,
         duration_seconds: durationSeconds,
+        ...(notes ? { notes } : {}),
       });
 
       // Read completion stats from Dexie (already populated by SetLogger)
@@ -236,7 +261,9 @@ export default function WorkoutActive() {
     setIsWorkingThroughSkipped(false);
     setPendingSkippedIndex(null);
     setSessionSwaps(new Map());
-    setPhase(dayStretches.post.length > 0 ? 'post-stretch' : 'complete');
+    const hasPostStretch = dayStretches.post.length > 0;
+    if (!hasPostStretch) setSkipNotes([]); // true end of session — safe to clear
+    setPhase(hasPostStretch ? 'post-stretch' : 'complete');
   };
 
   const handleStartWorkout = async () => {
@@ -254,7 +281,19 @@ export default function WorkoutActive() {
     startSession(template, id, now);
     enableWakeLock();
     setStretchIndex(0);
+    setSkippedStretchIndices([]);
+    setIsWorkingThroughSkippedStretches(false);
+    setSkipNotes([]);
     setPhase(dayStretches.pre.length > 0 ? 'pre-stretch' : 'workout');
+  };
+
+  // Finds the adjacent partner index sharing the same superset group, if any.
+  const findSupersetPartnerIndex = (index: number, te: TemplateExercise): number | undefined => {
+    if (!template || !te.isSuperset || te.supersetGroupId == null) return undefined;
+    return [index - 1, index + 1].find((i) => {
+      const partner = template.exercises[i];
+      return partner?.isSuperset && partner.supersetGroupId === te.supersetGroupId;
+    });
   };
 
   const handleSkipExercise = () => {
@@ -268,18 +307,9 @@ export default function WorkoutActive() {
     // deferring just one would strand its partner mid-pair. Only the pair's
     // first index goes into skippedIndices; resuming there naturally carries
     // through to the second half via the normal pair-alternation logic.
-    let deferIndex = currentExerciseIndex;
-    let resumeAt = currentExerciseIndex + 1;
-    if (currTE.isSuperset && currTE.supersetGroupId != null) {
-      const partnerIdx = [currentExerciseIndex - 1, currentExerciseIndex + 1].find((i) => {
-        const te = template.exercises[i];
-        return te?.isSuperset && te.supersetGroupId === currTE.supersetGroupId;
-      });
-      if (partnerIdx != null) {
-        deferIndex = Math.min(currentExerciseIndex, partnerIdx);
-        resumeAt = Math.max(currentExerciseIndex, partnerIdx) + 1;
-      }
-    }
+    const partnerIdx = findSupersetPartnerIndex(currentExerciseIndex, currTE);
+    const deferIndex = partnerIdx != null ? Math.min(currentExerciseIndex, partnerIdx) : currentExerciseIndex;
+    const resumeAt = (partnerIdx != null ? Math.max(currentExerciseIndex, partnerIdx) : currentExerciseIndex) + 1;
 
     const newSkipped = [...skippedIndices, deferIndex];
     const isLastMain = resumeAt >= template.exercises.length;
@@ -300,23 +330,144 @@ export default function WorkoutActive() {
     }
   };
 
-  const handleStretchNext = () => {
-    const list = phase === 'pre-stretch' ? dayStretches.pre : dayStretches.post;
-    if (stretchIndex < list.length - 1) {
-      setStretchIndex((i) => i + 1);
-    } else {
-      setStretchIndex(0);
-      if (phase === 'pre-stretch') {
-        setPhase('workout');
+  // Outright skip — won't be revisited this session, unlike "Skip for now"
+  // above. Recorded in skipNotes so it shows up on the session afterward.
+  const handleSkipExerciseEntirely = () => {
+    if (!template) return;
+    const currTE = template.exercises[currentExerciseIndex];
+    const exName = exerciseMap.get(currTE.exerciseId)?.name ?? currTE.exerciseId;
+
+    haptics.light();
+
+    const partnerIdx = findSupersetPartnerIndex(currentExerciseIndex, currTE);
+    const resumeAt = (partnerIdx != null ? Math.max(currentExerciseIndex, partnerIdx) : currentExerciseIndex) + 1;
+    const partnerName = partnerIdx != null
+      ? exerciseMap.get(template.exercises[partnerIdx].exerciseId)?.name ?? template.exercises[partnerIdx].exerciseId
+      : null;
+
+    setSkipNotes((notes) => [
+      ...notes,
+      partnerName ? `Skipped: ${exName} + ${partnerName} (superset)` : `Skipped: ${exName}`,
+    ]);
+
+    if (isWorkingThroughSkipped) {
+      if (skippedIndices.length > 0) {
+        const [first, ...rest] = skippedIndices;
+        setSkippedIndices(rest);
+        setExerciseAndSet(first, 1);
       } else {
-        setPhase('complete');
+        void finishWorkout();
       }
+      return;
+    }
+
+    if (resumeAt < template.exercises.length) {
+      setExerciseAndSet(resumeAt, 1);
+    } else if (skippedIndices.length > 0) {
+      const [first, ...rest] = skippedIndices;
+      setSkippedIndices(rest);
+      setIsWorkingThroughSkipped(true);
+      setExerciseAndSet(first, 1);
+    } else {
+      void finishWorkout();
     }
   };
 
+  // True end of the stretch phase — for post-stretch this is also the true
+  // end of the session, so it's where any skip notes accumulated during
+  // post-stretch (on top of whatever finishWorkout already saved) get
+  // persisted.
+  const finishStretchPhase = async () => {
+    setStretchIndex(0);
+    setSkippedStretchIndices([]);
+    setIsWorkingThroughSkippedStretches(false);
+    if (phase === 'pre-stretch') {
+      setPhase('workout');
+    } else {
+      if (skipNotes.length > 0) await persistSessionNotes(skipNotes.join(' · '));
+      setSkipNotes([]);
+      setPhase('complete');
+    }
+  };
+
+  // Shared "what's next" step for the stretch walkthrough — used by the
+  // normal Done flow and by defer/skip so they all converge on the same
+  // deferred-queue-then-next-phase logic. `skippedList` lets a caller that
+  // just mutated the deferred queue pass the up-to-date array directly,
+  // since the setSkippedStretchIndices call above it hasn't flushed yet.
+  const advanceStretch = (list: typeof dayStretches.pre, skippedList: number[] = skippedStretchIndices) => {
+    if (isWorkingThroughSkippedStretches) {
+      if (skippedList.length > 0) {
+        const [first, ...rest] = skippedList;
+        setSkippedStretchIndices(rest);
+        setStretchIndex(first);
+      } else {
+        void finishStretchPhase();
+      }
+      return;
+    }
+    if (stretchIndex < list.length - 1) {
+      setStretchIndex((i) => i + 1);
+    } else if (skippedList.length > 0) {
+      const [first, ...rest] = skippedList;
+      setSkippedStretchIndices(rest);
+      setIsWorkingThroughSkippedStretches(true);
+      setStretchIndex(first);
+    } else {
+      void finishStretchPhase();
+    }
+  };
+
+  const handleStretchNext = () => {
+    const list = phase === 'pre-stretch' ? dayStretches.pre : dayStretches.post;
+    advanceStretch(list);
+  };
+
+  // Defer — comes back later, once the rest of this stretch list is done.
+  const handleDeferStretch = () => {
+    if (isWorkingThroughSkippedStretches) return;
+    haptics.light();
+    const list = phase === 'pre-stretch' ? dayStretches.pre : dayStretches.post;
+    const nextSkipped = [...skippedStretchIndices, stretchIndex];
+    setSkippedStretchIndices(nextSkipped);
+    advanceStretch(list, nextSkipped);
+  };
+
+  // Outright skip — won't be revisited, recorded in skipNotes.
+  const handleSkipStretchEntirely = () => {
+    const list = phase === 'pre-stretch' ? dayStretches.pre : dayStretches.post;
+    const assignment = list[stretchIndex];
+    const stretchName = stretchExMap.get(assignment?.exerciseId ?? '')?.name ?? assignment?.exerciseId ?? '';
+    const phaseLabel = phase === 'pre-stretch' ? 'pre-workout' : 'post-workout';
+
+    haptics.light();
+    setSkipNotes((notes) => [...notes, `Skipped stretch: ${stretchName} (${phaseLabel})`]);
+    advanceStretch(list);
+  };
+
   const handleSetLogged = async (activeSet: ActiveSet, _isPR: boolean) => {
-    if (activeSet.isWarmup) return;
     if (!template) return;
+
+    if (activeSet.isWarmup) {
+      // Warmup sets don't count toward the set number or touch superset/PR
+      // logic — just a shorter breather (half the exercise's normal rest)
+      // before logging the next one for the same exercise.
+      logSetSilent(activeSet);
+      const currTE = effectiveTEAt(currentExerciseIndex);
+      const currEx = exerciseMap.get(currTE.exerciseId);
+      setRestLabel(`Warm-up done · ${currEx?.name ?? ''}`);
+      setRestNextExercise(currEx ?? null);
+      if (currEx) {
+        setRestNextTarget({
+          weight: currTE.isBodyweight ? null : await targetWeightFor(currTE, currentSetNumber),
+          reps: currTE.repRange,
+        });
+      } else {
+        setRestNextTarget(null);
+      }
+      startRestTimer(Math.round(currTE.restSeconds / 2));
+      return;
+    }
 
     const currTE = effectiveTEAt(currentExerciseIndex);
     const nextTE = currentExerciseIndex + 1 < template.exercises.length ? effectiveTEAt(currentExerciseIndex + 1) : undefined;
@@ -616,6 +767,8 @@ export default function WorkoutActive() {
         nextStretch={nextStretchEx}
         nextAssignment={nextAssignment}
         onNext={handleStretchNext}
+        onDefer={!isWorkingThroughSkippedStretches ? handleDeferStretch : undefined}
+        onSkipEntirely={handleSkipStretchEntirely}
       />
     );
   }
@@ -638,6 +791,8 @@ export default function WorkoutActive() {
         nextStretch={nextStretchEx}
         nextAssignment={nextAssignment}
         onNext={handleStretchNext}
+        onDefer={!isWorkingThroughSkippedStretches ? handleDeferStretch : undefined}
+        onSkipEntirely={handleSkipStretchEntirely}
       />
     );
   }
@@ -914,6 +1069,7 @@ export default function WorkoutActive() {
         sessionId={sessionId ?? ''}
         onSetLogged={handleSetLogged}
         onSkip={!isWorkingThroughSkipped ? handleSkipExercise : undefined}
+        onSkipEntirely={handleSkipExerciseEntirely}
       />
 
       {swapSheetOpen && (

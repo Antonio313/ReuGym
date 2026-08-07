@@ -129,6 +129,15 @@ function SessionCard({
           </span>
         )}
       </div>
+
+      {session.notes && (
+        <p
+          className="font-body mt-2"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)', fontStyle: 'italic', lineHeight: 1.5 }}
+        >
+          {session.notes}
+        </p>
+      )}
     </div>
   );
 }

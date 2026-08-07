@@ -161,6 +161,133 @@ type ConfigTarget =
   | { mode: 'add'; exerciseId: string }
   | { mode: 'edit'; index: number };
 
+// ── SubstituteConfigSheet ─────────────────────────────────────────
+
+type SubConfigTarget =
+  | { mode: 'add'; exerciseId: string }
+  | { mode: 'edit'; index: number };
+
+function SubstituteConfigSheet({
+  target, mainExercise, mainExerciseName, substitutes, exerciseMap, onSave, onClose,
+}: {
+  target: SubConfigTarget;
+  mainExercise: TemplateExercise;
+  mainExerciseName: string;
+  substitutes: SubstituteConfig[];
+  exerciseMap: Map<string, Exercise>;
+  onSave: (sub: SubstituteConfig, index?: number) => void;
+  onClose: () => void;
+}) {
+  const { unit, toDisplay, toKg } = useUnit();
+  const exerciseId = target.mode === 'add' ? target.exerciseId : substitutes[target.index].exerciseId;
+  const exercise = exerciseMap.get(exerciseId);
+  const existingSub = target.mode === 'edit' ? substitutes[target.index] : undefined;
+  const isBodyweight = exercise?.isBodyweight ?? false;
+
+  const [draft, setDraft] = useState<SubstituteConfig>(() => {
+    if (existingSub) return { ...existingSub };
+    return {
+      exerciseId,
+      sets: mainExercise.sets,
+      repRange: exercise?.defaultRepRange ?? mainExercise.repRange,
+      startingWeightKg: exercise?.startingWeightKg ?? 0,
+      restSeconds: exercise?.restSeconds ?? mainExercise.restSeconds,
+    };
+  });
+
+  return (
+    <>
+      <div className="fixed inset-0 z-[60]" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose} />
+
+      <div className="fixed bottom-0 left-0 right-0 z-[70] mx-auto flex flex-col"
+        style={{
+          maxWidth: 'var(--max-content-width)', background: 'var(--color-surface)',
+          borderRadius: '6px 6px 0 0', maxHeight: '80dvh', overflow: 'hidden',
+        }}>
+
+        <div className="flex items-center justify-between px-4 py-3 flex-shrink-0"
+          style={{ borderBottom: 'var(--border-thin)' }}>
+          <div>
+            <p className="font-body font-medium" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+              {exercise?.name ?? exerciseId}
+            </p>
+            <p className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
+              Substitute for {mainExerciseName}
+            </p>
+          </div>
+          <button onClick={onClose} style={{ color: 'var(--color-text-muted)' }}>
+            <X size={20} />
+          </button>
+        </div>
+
+        <div className="overflow-y-auto flex-1 px-4 py-4 flex flex-col gap-5">
+
+          <div>
+            <FieldLabel>Sets</FieldLabel>
+            <div className="flex items-center gap-3">
+              <StepBtn onClick={() => setDraft(d => ({ ...d, sets: Math.max(1, d.sets - 1) }))} disabled={draft.sets <= 1}>−</StepBtn>
+              <span className="font-mono" data-numeric
+                style={{ fontSize: 'var(--text-h3)', color: 'var(--color-text)', minWidth: '2rem', textAlign: 'center' }}>
+                {draft.sets}
+              </span>
+              <StepBtn onClick={() => setDraft(d => ({ ...d, sets: Math.min(10, d.sets + 1) }))} disabled={draft.sets >= 10}>+</StepBtn>
+            </div>
+          </div>
+
+          <div>
+            <FieldLabel>Rep range</FieldLabel>
+            <div className="flex items-center gap-2">
+              <NumericField value={draft.repRange[0]} min={1}
+                onCommit={v => setDraft(d => ({ ...d, repRange: [v, d.repRange[1]] }))} />
+              <span style={{ color: 'var(--color-text-muted)' }}>–</span>
+              <NumericField value={draft.repRange[1]} min={1}
+                onCommit={v => setDraft(d => ({ ...d, repRange: [d.repRange[0], v] }))} />
+            </div>
+            {draft.repRange[0] > draft.repRange[1] && (
+              <p className="font-body mt-1"
+                style={{ fontSize: 'var(--text-micro)', color: 'var(--color-regression)' }}>
+                {draft.repRange[0]}–{draft.repRange[1]} doesn't make sense — the first number should be lower.
+              </p>
+            )}
+          </div>
+
+          {!isBodyweight && (
+            <div>
+              <FieldLabel>Starting weight ({unit})</FieldLabel>
+              <NumericField
+                value={toDisplay(draft.startingWeightKg)}
+                allowDecimal
+                min={0}
+                width="6rem"
+                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: toKg(v) }))}
+              />
+            </div>
+          )}
+
+          <div>
+            <FieldLabel>Rest</FieldLabel>
+            <RestPresets value={draft.restSeconds} onChange={v => setDraft(d => ({ ...d, restSeconds: v }))} />
+          </div>
+
+          <div className="pb-2" />
+        </div>
+
+        <div className="px-4 pb-6 pt-3 flex-shrink-0" style={{ borderTop: 'var(--border-thin)' }}>
+          <button
+            onClick={() => onSave(draft, target.mode === 'edit' ? target.index : undefined)}
+            className="w-full py-4 font-display uppercase tracking-wide"
+            style={{
+              fontSize: 'var(--text-h2)', background: 'var(--color-accent)',
+              color: '#fff', borderRadius: 'var(--radius-md)', border: 'none',
+            }}>
+            {target.mode === 'add' ? 'Add Substitute' : 'Save Changes'}
+          </button>
+        </div>
+      </div>
+    </>
+  );
+}
+
 function ExerciseConfigSheet({
   target, templateId, exercises, exerciseMap, onSave, onClose,
 }: {
@@ -192,7 +319,17 @@ function ExerciseConfigSheet({
   });
 
   const [subPickerOpen, setSubPickerOpen] = useState(false);
+  const [subConfigTarget, setSubConfigTarget] = useState<SubConfigTarget | null>(null);
   const excludeIdsForSub = [draft.exerciseId, ...(draft.substitutes ?? []).map(s => s.exerciseId)];
+
+  const handleSubConfigSave = (sub: SubstituteConfig, index?: number) => {
+    if (index !== undefined) {
+      setDraft(d => ({ ...d, substitutes: (d.substitutes ?? []).map((s, i) => i === index ? sub : s) }));
+    } else {
+      setDraft(d => ({ ...d, substitutes: [...(d.substitutes ?? []), sub] }));
+    }
+    setSubConfigTarget(null);
+  };
 
   return (
     <>
@@ -282,7 +419,11 @@ function ExerciseConfigSheet({
               return (
                 <div key={sub.exerciseId} className="flex items-center gap-2 py-2"
                   style={{ borderBottom: 'var(--border-thin)' }}>
-                  <div className="flex-1 min-w-0">
+                  <button
+                    type="button"
+                    onClick={() => setSubConfigTarget({ mode: 'edit', index: i })}
+                    className="flex-1 min-w-0 text-left"
+                  >
                     <p className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
                       {subEx?.name ?? sub.exerciseId}
                     </p>
@@ -292,7 +433,7 @@ function ExerciseConfigSheet({
                       {' · '}{(subEx?.isBodyweight ?? false) ? 'BW' : `${toDisplay(sub.startingWeightKg)}${unit}`}
                       {' · '}{sub.restSeconds}s
                     </p>
-                  </div>
+                  </button>
                   <button
                     onClick={() => setDraft(d => ({ ...d, substitutes: (d.substitutes ?? []).filter((_, j) => j !== i) }))}
                     style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}>
@@ -329,20 +470,24 @@ function ExerciseConfigSheet({
         open={subPickerOpen}
         onClose={() => setSubPickerOpen(false)}
         onSelect={subId => {
-          const subEx = exerciseMap.get(subId);
-          const newSub: SubstituteConfig = {
-            exerciseId: subId,
-            sets: draft.sets,
-            repRange: subEx?.defaultRepRange ?? draft.repRange,
-            startingWeightKg: subEx?.startingWeightKg ?? 0,
-            restSeconds: subEx?.restSeconds ?? draft.restSeconds,
-          };
-          setDraft(d => ({ ...d, substitutes: [...(d.substitutes ?? []), newSub] }));
           setSubPickerOpen(false);
+          setSubConfigTarget({ mode: 'add', exerciseId: subId });
         }}
         excludeIds={excludeIdsForSub}
         returnTo={`/template/${templateId}/edit`}
       />
+
+      {subConfigTarget && (
+        <SubstituteConfigSheet
+          target={subConfigTarget}
+          mainExercise={draft}
+          mainExerciseName={exercise?.name ?? exerciseId}
+          substitutes={draft.substitutes ?? []}
+          exerciseMap={exerciseMap}
+          onSave={handleSubConfigSave}
+          onClose={() => setSubConfigTarget(null)}
+        />
+      )}
     </>
   );
 }

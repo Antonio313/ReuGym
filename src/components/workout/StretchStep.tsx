@@ -11,6 +11,8 @@ type Props = {
   nextStretch?: Exercise;
   nextAssignment?: DayStretch;
   onNext: () => void;
+  onDefer?: () => void;
+  onSkipEntirely?: () => void;
 };
 
 function formatTime(secs: number): string {
@@ -25,7 +27,7 @@ function formatRepRange(min: number, max: number, isTimed = false): string {
 }
 
 export function StretchStep({
-  stretch, assignment, index, total, phase, nextStretch, nextAssignment, onNext,
+  stretch, assignment, index, total, phase, nextStretch, nextAssignment, onNext, onDefer, onSkipEntirely,
 }: Props) {
   const { sets, repRange, isTimed, restSeconds, startingWeightKg, isBodyweight } = assignment;
 
@@ -257,6 +259,22 @@ export function StretchStep({
             style={{ fontSize: 'var(--text-h2)', background: 'var(--color-accent)', color: '#fff', borderRadius: 'var(--radius-md)', border: 'none', letterSpacing: '0.05em' }}>
             {currentSet < sets ? `Done · Set ${currentSet} of ${sets}` : 'Done'}
           </button>
+
+          {/* Defer — machine/space needed for this stretch is occupied */}
+          {onDefer && (
+            <button type="button" onClick={onDefer} className="w-full py-3 font-body"
+              style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)', border: 'var(--border-thin)', borderRadius: 'var(--radius-md)', background: 'transparent' }}>
+              Machine in use — skip for now
+            </button>
+          )}
+
+          {/* Outright skip — won't come back to this one this session */}
+          {onSkipEntirely && (
+            <button type="button" onClick={onSkipEntirely} className="w-full py-2 font-body"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)', border: 'none', background: 'transparent', textDecoration: 'underline' }}>
+              Can't do this stretch — skip it entirely
+            </button>
+          )}
         </>
       )}
     </div>

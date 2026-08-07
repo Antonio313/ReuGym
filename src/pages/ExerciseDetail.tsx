@@ -397,16 +397,6 @@ export default function ExerciseDetail() {
               {exercise.restSeconds}s
             </p>
           </div>
-          {!isBodyweight && (
-            <div>
-              <p className="font-body uppercase tracking-widest mb-1" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
-                Starting weight
-              </p>
-              <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                {toDisplay(exercise.startingWeightKg ?? 0)}{unit}
-              </p>
-            </div>
-          )}
         </div>
 
         {/* Notes */}

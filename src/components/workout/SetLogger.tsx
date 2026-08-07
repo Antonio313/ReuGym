@@ -23,6 +23,7 @@ type Props = {
   sessionId: string;
   onSetLogged: (set: ActiveSet, isPR: boolean) => void;
   onSkip?: () => void;
+  onSkipEntirely?: () => void;
 };
 
 
@@ -40,6 +41,7 @@ export function SetLogger({
   sessionId,
   onSetLogged,
   onSkip,
+  onSkipEntirely,
 }: Props) {
   const [weightStr, setWeightStr] = useState('');
   const [repsStr, setRepsStr] = useState('');
@@ -553,6 +555,24 @@ export function SetLogger({
             }}
           >
             Machine in use — skip for now
+          </button>
+        )}
+
+        {/* Outright skip — won't come back to this one this session */}
+        {onSkipEntirely && (
+          <button
+            type="button"
+            onClick={onSkipEntirely}
+            className="w-full py-2 font-body"
+            style={{
+              fontSize: 'var(--text-micro)',
+              color: 'var(--color-text-faint)',
+              border: 'none',
+              background: 'transparent',
+              textDecoration: 'underline',
+            }}
+          >
+            Can't do this exercise — skip it entirely
           </button>
         )}
       </div>

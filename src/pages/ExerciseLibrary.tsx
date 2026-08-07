@@ -3,24 +3,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { MagnifyingGlass, Plus } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { useExercises, useStretches } from '@/hooks/useExercises';
-import { useUnit } from '@/hooks/useUnit';
-import type { WeightUnit } from '@/lib/auth';
 import type { ExerciseCategory } from '@/types';
 
 function formatRepRange(min: number, max: number, isTimed = false): string {
   const unit = isTimed ? 's' : '';
   return min === max ? `${min}${unit}` : `${min}–${max}${unit}`;
-}
-
-function weightLabel(
-  startingWeightKg: number,
-  isBodyweight: boolean,
-  unit: WeightUnit,
-  toDisplay: (kg: number) => number,
-): string {
-  if (isBodyweight) return 'BW';
-  if (startingWeightKg === 0) return '—';
-  return `${toDisplay(startingWeightKg)}${unit}`;
 }
 
 const CATEGORY_ORDER: ExerciseCategory[] = ['push', 'pull', 'legs', 'core', 'glutes', 'back'];
@@ -33,7 +20,6 @@ type Tab = 'exercises' | 'stretches';
 
 export default function ExerciseLibrary() {
   const navigate = useNavigate();
-  const { unit, toDisplay } = useUnit();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialTab = searchParams.get('tab') === 'stretches' ? 'stretches' : 'exercises';
 
@@ -155,13 +141,8 @@ export default function ExerciseLibrary() {
                       {ex.muscles.join(' · ')}
                     </span>
                   </span>
-                  <span className="flex flex-col items-end" style={{ flexShrink: 0, marginLeft: '0.5rem' }}>
-                    <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-                      {ex.defaultRepRange ? formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed) : ''}
-                    </span>
-                    <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
-                      {weightLabel(ex.startingWeightKg ?? 0, ex.isBodyweight ?? false, unit, toDisplay)}
-                    </span>
+                  <span className="font-mono flex-shrink-0" data-numeric style={{ marginLeft: '0.5rem', fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+                    {ex.defaultRepRange ? formatRepRange(ex.defaultRepRange[0], ex.defaultRepRange[1], ex.isTimed) : ''}
                   </span>
                 </button>
               ))
