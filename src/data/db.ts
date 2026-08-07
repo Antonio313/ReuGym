@@ -15,6 +15,7 @@ export type DexieSet = {
   isWarmup: boolean;
   isPR: boolean;
   completedAt: number;
+  side?: 'left' | 'right';
 };
 
 export type DexieSession = {
@@ -59,6 +60,7 @@ export type DexieTemplateExercise = {
   restSeconds: number;
   isBodyweight: boolean;
   isTimed: boolean;
+  isPerSide: boolean;
   isSuperset: boolean;
   supersetGroupId?: string;
   substitutes?: SubstituteConfig[];
@@ -78,6 +80,7 @@ export type DexieTemplateStretch = {
   restSeconds: number;
   isBodyweight: boolean;
   isTimed: boolean;
+  isPerSide: boolean;
 };
 
 export type DexieCustomExercise = {
@@ -203,6 +206,7 @@ export function rowToSet(r: Row, userId: string): DexieSet {
     isWarmup:    (r.is_warmup as boolean) ?? false,
     isPR:        (r.is_pr as boolean) ?? false,
     completedAt: r.completed_at as number,
+    side:        r.side as 'left' | 'right' | undefined,
   };
 }
 
@@ -254,6 +258,7 @@ export function rowToTemplateExercise(r: Row, userId: string): DexieTemplateExer
     restSeconds:     (r.rest_seconds as number) ?? 60,
     isBodyweight:    (r.is_bodyweight as boolean) ?? false,
     isTimed:         (r.is_timed as boolean) ?? false,
+    isPerSide:       (r.is_per_side as boolean) ?? false,
     isSuperset:      (r.is_superset as boolean) ?? false,
     supersetGroupId: r.superset_group_id as string | undefined,
     substitutes:     (r.substitutes as SubstituteConfig[] | null) ?? [],
@@ -275,6 +280,7 @@ export function rowToTemplateStretch(r: Row, userId: string): DexieTemplateStret
     restSeconds:     (r.rest_seconds as number) ?? 30,
     isBodyweight:    (r.is_bodyweight as boolean) ?? false,
     isTimed:         (r.is_timed as boolean) ?? false,
+    isPerSide:       (r.is_per_side as boolean) ?? false,
   };
 }
 

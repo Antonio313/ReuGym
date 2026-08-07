@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, useLocation, useParams } from '
 import { AuthProvider, useAuth } from '@/context/AuthContext';
 import { SyncGate } from '@/components/SyncGate';
 import { BottomNav } from '@/components/layout/BottomNav';
+import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
 import Home from '@/pages/Home';
 import WorkoutActive from '@/pages/WorkoutActive';
 import WorkoutHistory from '@/pages/WorkoutHistory';
@@ -75,6 +76,7 @@ function AppRoutes() {
         <Route path="/signup"                    element={<SignUp />} />
       </Routes>
       {!isWorkoutActive && <BottomNav />}
+      <OnboardingModal />
     </>
   );
 }

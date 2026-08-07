@@ -21,6 +21,7 @@ export type Exercise = {
   isBodyweight?: boolean;
   isCable?: boolean;
   isTimed?: boolean;
+  isPerSide?: boolean;
   isStretch?: boolean;
   videoUrl?: string;
   notes?: string;
@@ -36,6 +37,7 @@ export type SubstituteConfig = {
   restSeconds: number;
   isBodyweight: boolean;
   isTimed: boolean;
+  isPerSide: boolean;
 };
 
 export type TemplateExercise = {
@@ -46,6 +48,7 @@ export type TemplateExercise = {
   restSeconds: number;
   isBodyweight: boolean;
   isTimed: boolean;
+  isPerSide: boolean;
   isSuperset: boolean;
   supersetGroupId?: string;
   substitutes?: SubstituteConfig[];
@@ -70,6 +73,7 @@ export type DayStretch = {
   restSeconds: number;
   isBodyweight: boolean;
   isTimed: boolean;
+  isPerSide: boolean;
 };
 
 // ─── Database Types ──────────────────────────────────────────────
@@ -94,6 +98,7 @@ export type LoggedSet = {
   isWarmup: boolean;
   isPR: boolean;
   completedAt: number;
+  side?: 'left' | 'right';
 };
 
 export type BodyStat = {
@@ -123,6 +128,7 @@ export type ActiveSet = {
   reps: number;
   rir: number;
   isWarmup: boolean;
+  side?: 'left' | 'right';
 };
 
 export type SessionStatus = 'idle' | 'active' | 'resting' | 'complete';

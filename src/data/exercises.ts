@@ -188,6 +188,7 @@ export const exercises: Exercise[] = [
     startingWeightKg: 0,
     restSeconds: 90,
     isBodyweight: false,
+    isPerSide: true,
     notes: 'Reps per leg',
   },
   {
@@ -249,6 +250,7 @@ export const exercises: Exercise[] = [
     restSeconds: 60,
     isBodyweight: false,
     isCable: true,
+    isPerSide: true,
     notes: 'Reps per side — rotational power for basketball',
   },
   {
@@ -273,6 +275,7 @@ export const exercises: Exercise[] = [
     restSeconds: 60,
     isBodyweight: false,
     isCable: true,
+    isPerSide: true,
     notes: 'Reps per side — anti-rotation, moderate cable',
   },
   {
@@ -322,6 +325,7 @@ export const exercises: Exercise[] = [
     restSeconds: 45,
     isBodyweight: true,
     isTimed: true,
+    isPerSide: true,
     notes: 'Eyes closed — proprioception for landing balance. Timer per leg.',
   },
 
@@ -360,6 +364,7 @@ export const exercises: Exercise[] = [
     startingWeightKg: 0,
     restSeconds: 60,
     isBodyweight: false,
+    isPerSide: true,
     notes: 'Reps per leg — drive through heel of working leg',
   },
   {
@@ -385,6 +390,7 @@ export const exercises: Exercise[] = [
     restSeconds: 60,
     isBodyweight: false,
     isCable: true,
+    isPerSide: true,
     notes: 'Reps per leg — full hip extension, squeeze at top',
   },
   {
@@ -409,6 +415,7 @@ export const exercises: Exercise[] = [
     startingWeightKg: 0,
     restSeconds: 45,
     isBodyweight: true,
+    isPerSide: true,
     notes: 'Reps per leg — squeeze at top, keep hips square',
   },
   {
@@ -421,6 +428,7 @@ export const exercises: Exercise[] = [
     startingWeightKg: 0,
     restSeconds: 45,
     isBodyweight: true,
+    isPerSide: true,
     notes: 'Reps per side — use band to progress, no hip rolling',
   },
 
@@ -460,6 +468,7 @@ export const exercises: Exercise[] = [
     startingWeightKg: 0,
     restSeconds: 90,
     isBodyweight: false,
+    isPerSide: true,
     notes: 'Reps per arm — brace on bench, full range of motion',
   },
   {

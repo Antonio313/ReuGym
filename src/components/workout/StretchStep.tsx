@@ -34,6 +34,7 @@ export function StretchStep({
   const timerDuration = isTimed ? repRange[1] : null;
 
   const [currentSet, setCurrentSet] = useState(1);
+  const [currentSide, setCurrentSide] = useState<'left' | 'right'>('left');
   const [isResting, setIsResting] = useState(false);
   const [secondsLeft, setSecondsLeft] = useState(0);
   const [timerSeconds, setTimerSeconds] = useState(timerDuration ?? 0);
@@ -47,6 +48,7 @@ export function StretchStep({
   // Reset everything when the stretch changes
   useEffect(() => {
     setCurrentSet(1);
+    setCurrentSide('left');
     setIsResting(false);
     setSecondsLeft(0);
     setTimerSeconds(timerDuration ?? 0);
@@ -108,6 +110,17 @@ export function StretchStep({
   const handleDone = () => {
     if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; }
     setTimerRunning(false);
+
+    // Per-side: do the other side immediately, no rest, same set number —
+    // only once both sides are done does this set count toward advancing.
+    if (assignment.isPerSide && currentSide === 'left') {
+      setCurrentSide('right');
+      setTimerSeconds(timerDuration ?? 0);
+      return;
+    }
+    if (assignment.isPerSide) {
+      setCurrentSide('left'); // reset for the next set's round
+    }
 
     if (currentSet < sets) {
       // More sets remaining — rest, then increment set
@@ -206,6 +219,13 @@ export function StretchStep({
               )}
             </div>
 
+            {assignment.isPerSide && (
+              <p className="font-display uppercase tracking-widest mb-3"
+                style={{ fontSize: 'var(--text-h3)', color: 'var(--color-accent)', letterSpacing: '0.08em' }}>
+                {currentSide} side
+              </p>
+            )}
+
             <p className="font-mono mb-4" data-numeric style={{ fontSize: 'var(--text-h2)', color: 'var(--color-accent)' }}>
               {repsDisplay}
               {!isBodyweight && startingWeightKg > 0 && (
@@ -257,7 +277,9 @@ export function StretchStep({
 
           <button type="button" onClick={handleDone} className="w-full py-4 font-display uppercase tracking-wide"
             style={{ fontSize: 'var(--text-h2)', background: 'var(--color-accent)', color: '#fff', borderRadius: 'var(--radius-md)', border: 'none', letterSpacing: '0.05em' }}>
-            {currentSet < sets ? `Done · Set ${currentSet} of ${sets}` : 'Done'}
+            {assignment.isPerSide && currentSide === 'left'
+              ? 'Done · Left'
+              : currentSet < sets ? `Done · Set ${currentSet} of ${sets}` : 'Done'}
           </button>
 
           {/* Defer — machine/space needed for this stretch is occupied */}

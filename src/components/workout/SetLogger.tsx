@@ -24,6 +24,7 @@ type Props = {
   onSetLogged: (set: ActiveSet, isPR: boolean) => void;
   onSkip?: () => void;
   onSkipEntirely?: () => void;
+  side?: 'left' | 'right';
 };
 
 
@@ -42,6 +43,7 @@ export function SetLogger({
   onSetLogged,
   onSkip,
   onSkipEntirely,
+  side,
 }: Props) {
   const [weightStr, setWeightStr] = useState('');
   const [repsStr, setRepsStr] = useState('');
@@ -58,7 +60,7 @@ export function SetLogger({
   const [timerLocked, setTimerLocked] = useState<number | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const lastData = useLastSetData(exercise.id, setNumber, sessionId);
+  const lastData = useLastSetData(exercise.id, setNumber, sessionId, side);
   const exercisePref = useExercisePref(exercise.id);
   const { unit, toDisplay, toKg } = useUnit();
 
@@ -75,7 +77,7 @@ export function SetLogger({
       clearInterval(timerIntervalRef.current);
       timerIntervalRef.current = null;
     }
-  }, [exercise.id, setNumber]);
+  }, [exercise.id, setNumber, side]);
 
   // Default weight: lastData → resolveStartingWeight(template, pref)
   const defaultWeightKg = lastData?.weightKg != null
@@ -159,6 +161,7 @@ export function SetLogger({
       isWarmup,
       isPR,
       completedAt: Date.now(),
+      side,
     };
 
     if (user) {
@@ -176,6 +179,7 @@ export function SetLogger({
         is_warmup:    loggedSet.isWarmup,
         is_pr:        loggedSet.isPR,
         completed_at: loggedSet.completedAt,
+        side:         loggedSet.side ?? null,
       });
     }
 
@@ -199,6 +203,7 @@ export function SetLogger({
         reps,
         rir,
         isWarmup,
+        side,
       },
       isPR,
     );
@@ -237,6 +242,14 @@ export function SetLogger({
             >
               {exercise.name.toUpperCase()}
             </h2>
+            {side && (
+              <p
+                className="font-display uppercase tracking-widest"
+                style={{ fontSize: 'var(--text-h3)', color: 'var(--color-accent)', letterSpacing: '0.08em' }}
+              >
+                {side} side
+              </p>
+            )}
             <div className="flex items-center gap-2 mt-0.5 flex-wrap">
               {templateExercise.isSuperset && (
                 <span

@@ -12,6 +12,7 @@ export async function fetchLastSetData(
   exerciseId: string,
   setNumber: number,
   currentSessionId: string | null,
+  side?: 'left' | 'right',
 ): Promise<{ weightKg: number; reps: number } | null> {
   if (!exerciseId) return null;
 
@@ -24,7 +25,10 @@ export async function fetchLastSetData(
       (s) =>
         s.setNumber === setNumber &&
         !s.isWarmup &&
-        s.sessionId !== (currentSessionId ?? ''),
+        s.sessionId !== (currentSessionId ?? '') &&
+        // Per-side exercises keep left/right history independent — a
+        // right-hand PR shouldn't silently seed the left side's default.
+        (side == null || s.side === side),
     )
     .toArray();
 
@@ -39,11 +43,12 @@ export function useLastSetData(
   exerciseId: string,
   setNumber: number,
   currentSessionId: string | null,
+  side?: 'left' | 'right',
 ): { weightKg: number; reps: number } | null | undefined {
   const user = getLocalSession();
 
   return useLiveQuery(async () => {
     if (!exerciseId || !user) return null;
-    return fetchLastSetData(user.id, exerciseId, setNumber, currentSessionId);
-  }, [exerciseId, setNumber, currentSessionId, user?.id]);
+    return fetchLastSetData(user.id, exerciseId, setNumber, currentSessionId, side);
+  }, [exerciseId, setNumber, currentSessionId, user?.id, side]);
 }

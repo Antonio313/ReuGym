@@ -184,14 +184,15 @@ function SubstituteConfigSheet({
   const existingSub = target.mode === 'edit' ? substitutes[target.index] : undefined;
 
   const [draft, setDraft] = useState<SubstituteConfig>(() => {
-    // Defensive fallback for substitutes saved before isBodyweight/isTimed
-    // existed on this type — they inherited the slot's flags at runtime, so
-    // that's the closest true value to seed the toggle from.
+    // Defensive fallback for substitutes saved before isBodyweight/isTimed/
+    // isPerSide existed on this type — they inherited the slot's flags at
+    // runtime, so that's the closest true value to seed the toggle from.
     if (existingSub) {
       return {
         ...existingSub,
         isBodyweight: existingSub.isBodyweight ?? mainExercise.isBodyweight,
         isTimed: existingSub.isTimed ?? mainExercise.isTimed,
+        isPerSide: existingSub.isPerSide ?? mainExercise.isPerSide,
       };
     }
     return {
@@ -202,6 +203,7 @@ function SubstituteConfigSheet({
       restSeconds: exercise?.restSeconds ?? mainExercise.restSeconds,
       isBodyweight: exercise?.isBodyweight ?? false,
       isTimed: exercise?.isTimed ?? false,
+      isPerSide: exercise?.isPerSide ?? false,
     };
   });
 
@@ -284,6 +286,8 @@ function SubstituteConfigSheet({
               onChange={v => setDraft(d => ({ ...d, isBodyweight: v, startingWeightKg: v ? 0 : d.startingWeightKg }))} />
             <ToggleField label="Timed" checked={draft.isTimed}
               onChange={v => setDraft(d => ({ ...d, isTimed: v }))} />
+            <ToggleField label="Per side" checked={draft.isPerSide}
+              onChange={v => setDraft(d => ({ ...d, isPerSide: v }))} />
           </div>
 
           <div className="pb-2" />
@@ -330,6 +334,7 @@ function ExerciseConfigSheet({
       restSeconds: exercise?.restSeconds ?? 60,
       isBodyweight: exercise?.isBodyweight ?? false,
       isTimed: exercise?.isTimed ?? false,
+      isPerSide: exercise?.isPerSide ?? false,
       isSuperset: false,
       substitutes: [],
     };
@@ -422,6 +427,8 @@ function ExerciseConfigSheet({
               onChange={v => setDraft(d => ({ ...d, isBodyweight: v, startingWeightKg: v ? 0 : d.startingWeightKg }))} />
             <ToggleField label="Timed" checked={draft.isTimed}
               onChange={v => setDraft(d => ({ ...d, isTimed: v }))} />
+            <ToggleField label="Per side" checked={draft.isPerSide}
+              onChange={v => setDraft(d => ({ ...d, isPerSide: v }))} />
           </div>
 
           <div>
@@ -449,6 +456,7 @@ function ExerciseConfigSheet({
                       {sub.sets}×{formatRepRange(sub.repRange[0], sub.repRange[1])}
                       {' · '}{(subEx?.isBodyweight ?? false) ? 'BW' : `${toDisplay(sub.startingWeightKg)}${unit}`}
                       {' · '}{sub.restSeconds}s
+                      {sub.isPerSide && ' · Per side'}
                     </p>
                   </button>
                   <button
@@ -566,6 +574,7 @@ function DraggableExerciseRow({
               {entry.sets}×{formatRepRange(entry.repRange[0], entry.repRange[1], entry.isTimed)}
               {' · '}{entry.isBodyweight ? 'BW' : `${toDisplay(entry.startingWeightKg)}${unit}`}
               {' · '}{entry.restSeconds}s
+              {entry.isPerSide && ' · Per side'}
             </p>
             {(entry.substitutes?.length ?? 0) > 0 && (
               <p className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
@@ -640,6 +649,7 @@ function StretchConfigSheet({
       restSeconds: stretchEx?.restSeconds ?? 0,
       isBodyweight: stretchEx?.isBodyweight ?? true,
       isTimed: stretchEx?.isTimed ?? false,
+      isPerSide: stretchEx?.isPerSide ?? false,
     };
   });
 
@@ -723,6 +733,8 @@ function StretchConfigSheet({
               onChange={v => setDraft(d => ({ ...d, isBodyweight: v, startingWeightKg: v ? 0 : d.startingWeightKg }))} />
             <ToggleField label="Timed" checked={draft.isTimed}
               onChange={v => setDraft(d => ({ ...d, isTimed: v }))} />
+            <ToggleField label="Per side" checked={draft.isPerSide}
+              onChange={v => setDraft(d => ({ ...d, isPerSide: v }))} />
           </div>
 
           <div className="pb-2" />
@@ -782,6 +794,7 @@ function DraggableStretchRow({
             {item.sets > 1 ? `${item.sets}×` : ''}{formatRepRange(item.repRange[0], item.repRange[1], item.isTimed)}
             {!item.isBodyweight && item.startingWeightKg > 0 && ` · ${toDisplay(item.startingWeightKg)}${unit}`}
             {item.restSeconds > 0 && ` · ${item.restSeconds}s rest`}
+            {item.isPerSide && ' · Per side'}
           </p>
         </div>
 

@@ -69,6 +69,12 @@ export default function WorkoutActive() {
   // the session's `notes` field so a skip is never silently lost.
   const [skipNotes, setSkipNotes] = useState<string[]>([]);
 
+  // Per-side exercises (e.g. cable woodchoppers) alternate left→right with
+  // no rest in between — like a superset pair, but within one exercise slot
+  // — tracked as "which side is up next" and reset to 'left' on every new
+  // exercise/set.
+  const [pendingSide, setPendingSide] = useState<'left' | 'right'>('left');
+
   // Session-only substitute swaps: exerciseIndex → SubstituteConfig
   const [sessionSwaps, setSessionSwaps] = useState<Map<number, SubstituteConfig>>(new Map());
   const [swapSheetOpen, setSwapSheetOpen] = useState(false);
@@ -148,6 +154,11 @@ export default function WorkoutActive() {
 
   const prevStatus = useRef(status);
   const mountedRef = useRef(false);
+
+  // Fresh exercise/set round always starts on the left side.
+  useEffect(() => {
+    setPendingSide('left');
+  }, [currentExerciseIndex, currentSetNumber]);
 
   // On first mount: detect if a session was already in progress (restored from localStorage)
   useEffect(() => {
@@ -472,6 +483,23 @@ export default function WorkoutActive() {
     }
 
     const currTE = effectiveTEAt(currentExerciseIndex);
+
+    // Per-side: log this side, no rest, flip to the other side and
+    // re-prompt for the same exercise/set — only once both sides are in
+    // does this "count" as a completed set for the logic below (set
+    // number, rest, superset transitions). This runs before superset
+    // detection so a per-side exercise that's also half of a superset pair
+    // composes naturally: both sides log first, then the normal superset
+    // handling below sees one completed set, same as any other.
+    if (currTE.isPerSide && activeSet.side === 'left') {
+      logSetSilent(activeSet);
+      setPendingSide('right');
+      return;
+    }
+    if (currTE.isPerSide && activeSet.side === 'right') {
+      setPendingSide('left');
+    }
+
     const nextTE = currentExerciseIndex + 1 < template.exercises.length ? effectiveTEAt(currentExerciseIndex + 1) : undefined;
     const prevTE = currentExerciseIndex > 0 ? effectiveTEAt(currentExerciseIndex - 1) : undefined;
 
@@ -1076,6 +1104,7 @@ export default function WorkoutActive() {
         onSetLogged={handleSetLogged}
         onSkip={!isWorkingThroughSkipped ? handleSkipExercise : undefined}
         onSkipEntirely={handleSkipExerciseEntirely}
+        side={effectiveTE.isPerSide ? pendingSide : undefined}
       />
 
       {swapSheetOpen && (

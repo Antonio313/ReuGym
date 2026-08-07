@@ -17,6 +17,7 @@ function dexieToDayStretch(row: DexieTemplateStretch): DayStretch {
     restSeconds:      row.restSeconds,
     isBodyweight:     row.isBodyweight,
     isTimed:          row.isTimed,
+    isPerSide:        row.isPerSide,
   };
 }
 
@@ -73,6 +74,7 @@ export async function saveDayStretches(
         restSeconds:     s.restSeconds,
         isBodyweight:    s.isBodyweight,
         isTimed:         s.isTimed,
+        isPerSide:       s.isPerSide,
       };
       const snake = {
         id,
@@ -88,6 +90,7 @@ export async function saveDayStretches(
         rest_seconds:       s.restSeconds,
         is_bodyweight:      s.isBodyweight,
         is_timed:           s.isTimed,
+        is_per_side:        s.isPerSide,
       };
       return { dexie, snake };
     });

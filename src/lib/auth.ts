@@ -5,7 +5,7 @@ const SESSION_KEY = 'reugym_session';
 
 export type WeightUnit = 'kg' | 'lbs';
 
-export type AuthUser = { id: string; email: string; weightUnit: WeightUnit };
+export type AuthUser = { id: string; email: string; weightUnit: WeightUnit; hasSeenOnboarding: boolean };
 
 export function getLocalSession(): AuthUser | null {
   try {
@@ -27,7 +27,7 @@ export function clearLocalSession(): void {
 export async function signIn(email: string): Promise<AuthUser> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, weight_unit')
+    .select('id, email, weight_unit, has_seen_onboarding')
     .eq('email', email.toLowerCase().trim())
     .single();
   if (error || !data) throw new Error('NO_ACCOUNT');
@@ -35,6 +35,7 @@ export async function signIn(email: string): Promise<AuthUser> {
     id: data.id as string,
     email: data.email as string,
     weightUnit: (data.weight_unit as WeightUnit) ?? 'kg',
+    hasSeenOnboarding: (data.has_seen_onboarding as boolean) ?? false,
   };
   setLocalSession(user);
   return user;
@@ -51,13 +52,14 @@ export async function signUp(email: string): Promise<AuthUser> {
   const { data, error } = await supabase
     .from('users')
     .insert({ email: trimmed })
-    .select('id, email, weight_unit')
+    .select('id, email, weight_unit, has_seen_onboarding')
     .single();
   if (error || !data) throw new Error('SIGNUP_FAILED');
   const user = {
     id: data.id as string,
     email: data.email as string,
     weightUnit: (data.weight_unit as WeightUnit) ?? 'kg',
+    hasSeenOnboarding: (data.has_seen_onboarding as boolean) ?? false,
   };
   setLocalSession(user);
   return user;
@@ -77,5 +79,14 @@ export async function updateWeightUnit(userId: string, unit: WeightUnit): Promis
     setLocalSession({ ...current, weightUnit: unit });
   }
   await enqueueSync(userId, 'users', 'upsert', { id: userId, weight_unit: unit });
+  await syncNow(userId);
+}
+
+export async function markOnboardingSeen(userId: string): Promise<void> {
+  const current = getLocalSession();
+  if (current && current.id === userId) {
+    setLocalSession({ ...current, hasSeenOnboarding: true });
+  }
+  await enqueueSync(userId, 'users', 'upsert', { id: userId, has_seen_onboarding: true });
   await syncNow(userId);
 }

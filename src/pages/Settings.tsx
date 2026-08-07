@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from '@phosphor-icons/react';
+import { ArrowLeft, BookOpen } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { useAuth } from '@/context/AuthContext';
 import type { WeightUnit } from '@/lib/auth';
@@ -12,7 +12,7 @@ const UNITS: { id: WeightUnit; label: string }[] = [
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { user, setWeightUnit } = useAuth();
+  const { user, setWeightUnit, openOnboarding } = useAuth();
   const [saving, setSaving] = useState<WeightUnit | null>(null);
 
   const handleSelect = async (unit: WeightUnit) => {
@@ -89,6 +89,29 @@ export default function Settings() {
         >
           Applies to lifting weights and Body Stats.
         </p>
+
+        <p
+          className="font-body uppercase tracking-widest mb-3 mt-8"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+        >
+          Help
+        </p>
+
+        <button
+          type="button"
+          onClick={openOnboarding}
+          className="flex items-center gap-3 w-full py-4 px-4 font-body"
+          style={{
+            fontSize: 'var(--text-body)',
+            background: 'var(--color-surface)',
+            border: 'var(--border-thin)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--color-text)',
+          }}
+        >
+          <BookOpen size={20} style={{ color: 'var(--color-text-muted)' }} />
+          Replay welcome guide
+        </button>
       </main>
     </PageShell>
   );
