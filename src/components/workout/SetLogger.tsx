@@ -12,7 +12,7 @@ import { playSetLogged } from '@/lib/audio';
 import { NumericKeypad } from '@/components/shared/NumericKeypad';
 import { VideoReference } from '@/components/workout/VideoReference';
 import { PRBadge } from '@/components/workout/PRBadge';
-import { snapToNearestDumbbell, resolveStartingWeight } from '@/lib/weights';
+import { resolveStartingWeight } from '@/lib/weights';
 import type { TemplateExercise, Exercise, ActiveSet } from '@/types';
 
 type Props = {
@@ -75,9 +75,9 @@ export function SetLogger({
     }
   }, [exercise.id, setNumber]);
 
-  // Default weight: lastData → resolveStartingWeight(template, pref) → snap to dumbbell
+  // Default weight: lastData → resolveStartingWeight(template, pref)
   const defaultWeightKg = lastData?.weightKg != null
-    ? snapToNearestDumbbell(lastData.weightKg)
+    ? lastData.weightKg
     : resolveStartingWeight(templateExercise.startingWeightKg, exercisePref?.startingWeightKg);
 
   // Default reps: lastData → max(pref, template lower bound)

@@ -12,7 +12,6 @@ import { useTemplate, saveTemplate } from '@/hooks/useTemplates';
 import { useExercises, useStretches } from '@/hooks/useExercises';
 import { useDayStretches, saveDayStretches } from '@/hooks/useDayStretches';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
-import { snapToNearestDumbbell } from '@/lib/weights';
 import { useUnit } from '@/hooks/useUnit';
 import type { TemplateExercise, WorkoutTemplate, DayStretch, Exercise, SubstituteConfig } from '@/types';
 
@@ -183,7 +182,7 @@ function ExerciseConfigSheet({
       exerciseId,
       sets: 3,
       repRange: exercise?.defaultRepRange ?? [8, 12],
-      startingWeightKg: snapToNearestDumbbell(exercise?.startingWeightKg ?? 0),
+      startingWeightKg: exercise?.startingWeightKg ?? 0,
       restSeconds: exercise?.restSeconds ?? 60,
       isBodyweight: exercise?.isBodyweight ?? false,
       isTimed: exercise?.isTimed ?? false,
@@ -254,12 +253,8 @@ function ExerciseConfigSheet({
                 allowDecimal
                 min={0}
                 width="6rem"
-                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: snapToNearestDumbbell(toKg(v)) }))}
+                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: toKg(v) }))}
               />
-              <p className="font-body mt-1"
-                style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
-                Snaps to nearest dumbbell
-              </p>
             </div>
           )}
 
@@ -339,7 +334,7 @@ function ExerciseConfigSheet({
             exerciseId: subId,
             sets: draft.sets,
             repRange: subEx?.defaultRepRange ?? draft.repRange,
-            startingWeightKg: snapToNearestDumbbell(subEx?.startingWeightKg ?? 0),
+            startingWeightKg: subEx?.startingWeightKg ?? 0,
             restSeconds: subEx?.restSeconds ?? draft.restSeconds,
           };
           setDraft(d => ({ ...d, substitutes: [...(d.substitutes ?? []), newSub] }));
@@ -545,12 +540,8 @@ function StretchConfigSheet({
                 allowDecimal
                 min={0}
                 width="6rem"
-                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: snapToNearestDumbbell(toKg(v)) }))}
+                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: toKg(v) }))}
               />
-              <p className="font-body mt-1"
-                style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
-                Snaps to nearest dumbbell
-              </p>
             </div>
           )}
 
