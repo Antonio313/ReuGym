@@ -11,6 +11,7 @@ import { useTemplate } from '@/hooks/useTemplates';
 import { useExercises, useStretches } from '@/hooks/useExercises';
 import { useDayStretches } from '@/hooks/useDayStretches';
 import { loadAllPrefs } from '@/hooks/useExercisePref';
+import { fetchLastSetData } from '@/hooks/useLastSetData';
 import { useWorkoutStore } from '@/store/workoutStore';
 import { enableWakeLock, disableWakeLock } from '@/lib/wakeLock';
 import { getLocalSession } from '@/lib/auth';
@@ -22,7 +23,7 @@ import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
 import { resolveStartingWeight } from '@/lib/weights';
 import { useUnit } from '@/hooks/useUnit';
-import type { ActiveSet, Exercise, ExercisePref, SubstituteConfig } from '@/types';
+import type { ActiveSet, Exercise, ExercisePref, SubstituteConfig, TemplateExercise } from '@/types';
 
 type WorkoutPhase = 'preview' | 'pre-stretch' | 'workout' | 'post-stretch' | 'complete';
 
@@ -78,10 +79,34 @@ export default function WorkoutActive() {
   }, []);
 
   // Keeps "upcoming" weight previews (rest screen, feeling meter) in sync with
-  // the same pref-aware value SetLogger actually defaults to — templateExercise
-  // .startingWeightKg alone goes stale as your working weight climbs.
-  const targetWeightFor = (te: { exerciseId: string; startingWeightKg: number }) =>
-    resolveStartingWeight(te.startingWeightKg, prefsMap.get(te.exerciseId)?.startingWeightKg);
+  // the exact value SetLogger will actually default to for that set number —
+  // mirrors SetLogger's own priority order (history for this exact set number
+  // first, then pref/template) so the two can never show different numbers
+  // for the same upcoming set.
+  const targetWeightFor = async (
+    te: { exerciseId: string; startingWeightKg: number },
+    setNumber: number,
+  ): Promise<number> => {
+    const user = getLocalSession();
+    const lastData = user
+      ? await fetchLastSetData(user.id, te.exerciseId, setNumber, sessionId)
+      : null;
+    return lastData?.weightKg
+      ?? resolveStartingWeight(te.startingWeightKg, prefsMap.get(te.exerciseId)?.startingWeightKg);
+  };
+
+  // Resolves a template slot to what's actually being performed there this
+  // session — a slot with an active substitute takes the substitute's own
+  // sets/reps/weight/rest, but keeps the slot's superset membership so
+  // pairing logic (below) continues to treat it as part of the same pair.
+  // Only called (in handleSetLogged) once `template` is known to exist.
+  const effectiveTEAt = (index: number): TemplateExercise => {
+    const te = template!.exercises[index];
+    const swap = sessionSwaps.get(index);
+    return swap
+      ? { ...te, ...swap, isBodyweight: te.isBodyweight, isTimed: te.isTimed }
+      : te;
+  };
 
   const store = useWorkoutStore();
   const {
@@ -235,18 +260,39 @@ export default function WorkoutActive() {
   const handleSkipExercise = () => {
     if (!template || isWorkingThroughSkipped) return;
     const currTE = template.exercises[currentExerciseIndex];
-    if (currTE.isSuperset) return; // supersets can't be skipped mid-pair
 
     haptics.light();
 
-    const newSkipped = [...skippedIndices, currentExerciseIndex];
-    const isLastMain = currentExerciseIndex === template.exercises.length - 1;
+    // Defer a whole superset pair together — the two halves depend on each
+    // other (handleSetLogged alternates between them by adjacent index), so
+    // deferring just one would strand its partner mid-pair. Only the pair's
+    // first index goes into skippedIndices; resuming there naturally carries
+    // through to the second half via the normal pair-alternation logic.
+    let deferIndex = currentExerciseIndex;
+    let resumeAt = currentExerciseIndex + 1;
+    if (currTE.isSuperset && currTE.supersetGroupId != null) {
+      const partnerIdx = [currentExerciseIndex - 1, currentExerciseIndex + 1].find((i) => {
+        const te = template.exercises[i];
+        return te?.isSuperset && te.supersetGroupId === currTE.supersetGroupId;
+      });
+      if (partnerIdx != null) {
+        deferIndex = Math.min(currentExerciseIndex, partnerIdx);
+        resumeAt = Math.max(currentExerciseIndex, partnerIdx) + 1;
+      }
+    }
+
+    const newSkipped = [...skippedIndices, deferIndex];
+    const isLastMain = resumeAt >= template.exercises.length;
 
     if (!isLastMain) {
       setSkippedIndices(newSkipped);
-      nextExercise();
+      if (resumeAt === currentExerciseIndex + 1) {
+        nextExercise();
+      } else {
+        setExerciseAndSet(resumeAt, 1);
+      }
     } else {
-      // Skipped the last main exercise — jump straight to the first deferred one
+      // Skipped the last main exercise (or pair) — jump straight to the first deferred one
       const [first, ...rest] = newSkipped;
       setSkippedIndices(rest);
       setIsWorkingThroughSkipped(true);
@@ -272,9 +318,9 @@ export default function WorkoutActive() {
     if (activeSet.isWarmup) return;
     if (!template) return;
 
-    const currTE = template.exercises[currentExerciseIndex];
-    const nextTE = template.exercises[currentExerciseIndex + 1];
-    const prevTE = template.exercises[currentExerciseIndex - 1];
+    const currTE = effectiveTEAt(currentExerciseIndex);
+    const nextTE = currentExerciseIndex + 1 < template.exercises.length ? effectiveTEAt(currentExerciseIndex + 1) : undefined;
+    const prevTE = currentExerciseIndex > 0 ? effectiveTEAt(currentExerciseIndex - 1) : undefined;
 
     const isLastSet = currentSetNumber === currTE.sets;
     const isLastMainExercise = currentExerciseIndex === template.exercises.length - 1;
@@ -292,15 +338,15 @@ export default function WorkoutActive() {
       prevTE.supersetGroupId != null &&
       prevTE.supersetGroupId === currTE.supersetGroupId;
 
-    if (isFirstInPair) {
+    if (isFirstInPair && nextTE) {
       logSetSilent(activeSet);
-      const partnerName = exerciseMap.get(nextTE.exerciseId)?.name ?? '';
       const partnerEx = exerciseMap.get(nextTE.exerciseId);
+      const partnerName = partnerEx?.name ?? '';
       setRestLabel(`${partnerName} — Set ${currentSetNumber}`);
       setRestNextExercise(partnerEx ?? null);
       if (partnerEx) {
         setRestNextTarget({
-          weight: nextTE.isBodyweight ? null : targetWeightFor(nextTE),
+          weight: nextTE.isBodyweight ? null : await targetWeightFor(nextTE, currentSetNumber),
           reps: nextTE.repRange,
         });
       } else {
@@ -310,7 +356,7 @@ export default function WorkoutActive() {
       return;
     }
 
-    if (isSecondInPair) {
+    if (isSecondInPair && prevTE) {
       logSetSilent(activeSet);
       const isLastSetOfPair = isLastSet;
       const partnerExerciseA = exerciseMap.get(prevTE.exerciseId);
@@ -322,7 +368,7 @@ export default function WorkoutActive() {
         setRestNextExercise(partnerExerciseA ?? null);
         if (partnerExerciseA) {
           setRestNextTarget({
-            weight: prevTE.isBodyweight ? null : targetWeightFor(prevTE),
+            weight: prevTE.isBodyweight ? null : await targetWeightFor(prevTE, currentSetNumber + 1),
             reps: prevTE.repRange,
           });
         } else {
@@ -339,7 +385,7 @@ export default function WorkoutActive() {
           queueEntries.push({
             exerciseId: partnerExerciseA.id,
             exercise: partnerExerciseA,
-            startingWeightKg: targetWeightFor(prevTE),
+            startingWeightKg: await targetWeightFor(prevTE, 1),
             startingReps: prefA?.startingReps ?? prevTE.repRange[0],
             sessionId: sid,
           });
@@ -349,7 +395,7 @@ export default function WorkoutActive() {
           queueEntries.push({
             exerciseId: partnerExerciseB.id,
             exercise: partnerExerciseB,
-            startingWeightKg: targetWeightFor(currTE),
+            startingWeightKg: await targetWeightFor(currTE, 1),
             startingReps: prefB?.startingReps ?? currTE.repRange[0],
             sessionId: sid,
           });
@@ -359,14 +405,14 @@ export default function WorkoutActive() {
         const hasMoreDeferred = skippedIndices.length > 0;
 
         if (hasMoreMain) {
-          const nextNonSupersetEx = template.exercises[currentExerciseIndex + 1];
+          const nextNonSupersetEx = effectiveTEAt(currentExerciseIndex + 1);
           const nextEx = exerciseMap.get(nextNonSupersetEx.exerciseId);
           const nextName = nextEx?.name ?? '';
           setRestLabel(`Next: ${nextName}`);
           setRestNextExercise(nextEx ?? null);
           if (nextEx) {
             setRestNextTarget({
-              weight: nextNonSupersetEx.isBodyweight ? null : targetWeightFor(nextNonSupersetEx),
+              weight: nextNonSupersetEx.isBodyweight ? null : await targetWeightFor(nextNonSupersetEx, 1),
               reps: nextNonSupersetEx.repRange,
             });
           } else {
@@ -375,13 +421,13 @@ export default function WorkoutActive() {
           nextExercise();
         } else if (hasMoreDeferred) {
           const [first, ...rest] = skippedIndices;
-          const firstSkippedTE = template.exercises[first];
+          const firstSkippedTE = effectiveTEAt(first);
           const nextEx = exerciseMap.get(firstSkippedTE.exerciseId);
           setRestLabel(`Next: ${nextEx?.name ?? ''} (deferred)`);
           setRestNextExercise(nextEx ?? null);
           if (nextEx) {
             setRestNextTarget({
-              weight: firstSkippedTE.isBodyweight ? null : targetWeightFor(firstSkippedTE),
+              weight: firstSkippedTE.isBodyweight ? null : await targetWeightFor(firstSkippedTE, 1),
               reps: firstSkippedTE.repRange,
             });
           } else {
@@ -417,10 +463,10 @@ export default function WorkoutActive() {
     if (!isLastSet) {
       label = `Set ${currentSetNumber + 1} of ${currTE.sets} · ${exerciseName}`;
     } else if (hasMoreMain) {
-      const nextTeEntry = template.exercises[currentExerciseIndex + 1];
+      const nextTeEntry = effectiveTEAt(currentExerciseIndex + 1);
       label = `Next: ${exerciseMap.get(nextTeEntry.exerciseId)?.name ?? ''}`;
     } else if (hasMoreDeferred) {
-      label = `Next: ${exerciseMap.get(template.exercises[skippedIndices[0]].exerciseId)?.name ?? ''} (deferred)`;
+      label = `Next: ${exerciseMap.get(effectiveTEAt(skippedIndices[0]).exerciseId)?.name ?? ''} (deferred)`;
     } else {
       label = "That's the last set — cool down time";
     }
@@ -432,31 +478,31 @@ export default function WorkoutActive() {
       setRestNextExercise(currEx ?? null);
       if (currEx) {
         setRestNextTarget({
-          weight: currTE.isBodyweight ? null : targetWeightFor(currTE),
+          weight: currTE.isBodyweight ? null : await targetWeightFor(currTE, currentSetNumber + 1),
           reps: currTE.repRange,
         });
       } else {
         setRestNextTarget(null);
       }
     } else if (hasMoreMain) {
-      const nextTeEntry = template.exercises[currentExerciseIndex + 1];
+      const nextTeEntry = effectiveTEAt(currentExerciseIndex + 1);
       const nextEx = exerciseMap.get(nextTeEntry.exerciseId);
       setRestNextExercise(nextEx ?? null);
       if (nextEx) {
         setRestNextTarget({
-          weight: nextTeEntry.isBodyweight ? null : targetWeightFor(nextTeEntry),
+          weight: nextTeEntry.isBodyweight ? null : await targetWeightFor(nextTeEntry, 1),
           reps: nextTeEntry.repRange,
         });
       } else {
         setRestNextTarget(null);
       }
     } else if (hasMoreDeferred) {
-      const nextSkippedTE = template.exercises[skippedIndices[0]];
+      const nextSkippedTE = effectiveTEAt(skippedIndices[0]);
       const nextEx = exerciseMap.get(nextSkippedTE.exerciseId);
       setRestNextExercise(nextEx ?? null);
       if (nextEx) {
         setRestNextTarget({
-          weight: nextSkippedTE.isBodyweight ? null : targetWeightFor(nextSkippedTE),
+          weight: nextSkippedTE.isBodyweight ? null : await targetWeightFor(nextSkippedTE, 1),
           reps: nextSkippedTE.repRange,
         });
       } else {
@@ -490,7 +536,7 @@ export default function WorkoutActive() {
         setFeelingQueue([{
           exerciseId: exercise.id,
           exercise,
-          startingWeightKg: targetWeightFor(currTE),
+          startingWeightKg: await targetWeightFor(currTE, 1),
           startingReps: pref?.startingReps ?? currTE.repRange[0],
           sessionId: sessionId ?? '',
         }]);
@@ -867,7 +913,7 @@ export default function WorkoutActive() {
         totalSets={currentTemplateExercise.sets}
         sessionId={sessionId ?? ''}
         onSetLogged={handleSetLogged}
-        onSkip={!currentTemplateExercise.isSuperset && !isWorkingThroughSkipped ? handleSkipExercise : undefined}
+        onSkip={!isWorkingThroughSkipped ? handleSkipExercise : undefined}
       />
 
       {swapSheetOpen && (
