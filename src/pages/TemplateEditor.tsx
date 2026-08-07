@@ -182,16 +182,26 @@ function SubstituteConfigSheet({
   const exerciseId = target.mode === 'add' ? target.exerciseId : substitutes[target.index].exerciseId;
   const exercise = exerciseMap.get(exerciseId);
   const existingSub = target.mode === 'edit' ? substitutes[target.index] : undefined;
-  const isBodyweight = exercise?.isBodyweight ?? false;
 
   const [draft, setDraft] = useState<SubstituteConfig>(() => {
-    if (existingSub) return { ...existingSub };
+    // Defensive fallback for substitutes saved before isBodyweight/isTimed
+    // existed on this type — they inherited the slot's flags at runtime, so
+    // that's the closest true value to seed the toggle from.
+    if (existingSub) {
+      return {
+        ...existingSub,
+        isBodyweight: existingSub.isBodyweight ?? mainExercise.isBodyweight,
+        isTimed: existingSub.isTimed ?? mainExercise.isTimed,
+      };
+    }
     return {
       exerciseId,
       sets: mainExercise.sets,
       repRange: exercise?.defaultRepRange ?? mainExercise.repRange,
       startingWeightKg: exercise?.startingWeightKg ?? 0,
       restSeconds: exercise?.restSeconds ?? mainExercise.restSeconds,
+      isBodyweight: exercise?.isBodyweight ?? false,
+      isTimed: exercise?.isTimed ?? false,
     };
   });
 
@@ -251,7 +261,7 @@ function SubstituteConfigSheet({
             )}
           </div>
 
-          {!isBodyweight && (
+          {!draft.isBodyweight && (
             <div>
               <FieldLabel>Starting weight ({unit})</FieldLabel>
               <NumericField
@@ -267,6 +277,13 @@ function SubstituteConfigSheet({
           <div>
             <FieldLabel>Rest</FieldLabel>
             <RestPresets value={draft.restSeconds} onChange={v => setDraft(d => ({ ...d, restSeconds: v }))} />
+          </div>
+
+          <div className="flex gap-6">
+            <ToggleField label="Bodyweight" checked={draft.isBodyweight}
+              onChange={v => setDraft(d => ({ ...d, isBodyweight: v, startingWeightKg: v ? 0 : d.startingWeightKg }))} />
+            <ToggleField label="Timed" checked={draft.isTimed}
+              onChange={v => setDraft(d => ({ ...d, isTimed: v }))} />
           </div>
 
           <div className="pb-2" />

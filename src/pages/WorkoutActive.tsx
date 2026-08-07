@@ -107,14 +107,16 @@ export default function WorkoutActive() {
 
   // Resolves a template slot to what's actually being performed there this
   // session — a slot with an active substitute takes the substitute's own
-  // sets/reps/weight/rest, but keeps the slot's superset membership so
-  // pairing logic (below) continues to treat it as part of the same pair.
+  // sets/reps/weight/rest/bodyweight/timed nature, but keeps the slot's
+  // superset membership so pairing logic (below) continues to treat it as
+  // part of the same pair. isBodyweight/isTimed fall back to the slot's own
+  // values for substitutes saved before those fields existed on the type.
   // Only called (in handleSetLogged) once `template` is known to exist.
   const effectiveTEAt = (index: number): TemplateExercise => {
     const te = template!.exercises[index];
     const swap = sessionSwaps.get(index);
     return swap
-      ? { ...te, ...swap, isBodyweight: te.isBodyweight, isTimed: te.isTimed }
+      ? { ...te, ...swap, isBodyweight: swap.isBodyweight ?? te.isBodyweight, isTimed: swap.isTimed ?? te.isTimed }
       : te;
   };
 
@@ -849,7 +851,11 @@ export default function WorkoutActive() {
 
   const activeSwap = sessionSwaps.get(currentExerciseIndex);
   const effectiveTE = activeSwap
-    ? { ...currentTemplateExercise, ...activeSwap, isBodyweight: currentTemplateExercise.isBodyweight, isTimed: currentTemplateExercise.isTimed }
+    ? {
+        ...currentTemplateExercise, ...activeSwap,
+        isBodyweight: activeSwap.isBodyweight ?? currentTemplateExercise.isBodyweight,
+        isTimed: activeSwap.isTimed ?? currentTemplateExercise.isTimed,
+      }
     : currentTemplateExercise;
   const effectiveExercise = activeSwap
     ? (exerciseMap.get(activeSwap.exerciseId) ?? currentExercise)

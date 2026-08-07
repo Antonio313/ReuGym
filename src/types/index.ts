@@ -34,6 +34,8 @@ export type SubstituteConfig = {
   repRange: [number, number];
   startingWeightKg: number;
   restSeconds: number;
+  isBodyweight: boolean;
+  isTimed: boolean;
 };
 
 export type TemplateExercise = {
