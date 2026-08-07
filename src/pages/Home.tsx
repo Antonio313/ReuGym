@@ -5,7 +5,7 @@ import { PencilSimple, ChatCircle } from '@phosphor-icons/react';
 import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
 import { AIChatDrawer } from '@/components/workout/AIChatDrawer';
-import { useTemplates } from '@/hooks/useTemplates';
+import { useTemplates, useTemplate } from '@/hooks/useTemplates';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import type { WorkoutTemplate } from '@/types';
@@ -37,6 +37,21 @@ type DayCardProps = {
 function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
+  const [liveTemplate] = useTemplate(template.id);
+  // Falls back to the static count only while the live query is still
+  // loading (undefined) — once it resolves, it's the source of truth,
+  // including a genuine 0 if the user has emptied this day.
+  const exerciseCount = liveTemplate?.exercises.length ?? template.exercises.length;
+  const [showEmptyWarning, setShowEmptyWarning] = useState(false);
+
+  const handleStart = () => {
+    if (exerciseCount === 0) {
+      setShowEmptyWarning(true);
+      setTimeout(() => setShowEmptyWarning(false), 3000);
+      return;
+    }
+    navigate(`/workout/${template.id}`);
+  };
 
   return (
     <motion.div
@@ -76,20 +91,25 @@ function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
         className="font-body"
         style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}
       >
-        {template.exercises.length} exercises
+        {exerciseCount} exercise{exerciseCount === 1 ? '' : 's'}
       </span>
 
-      {/* Last session */}
+      {/* Last session / empty-day warning */}
       <span
         className="font-body"
-        style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}
+        style={{
+          fontSize: 'var(--text-meta)',
+          color: showEmptyWarning ? 'var(--color-regression)' : 'var(--color-text-faint)',
+        }}
       >
-        {lastSessionDate ? `Last: ${formatDate(lastSessionDate)}` : 'Never done'}
+        {showEmptyWarning
+          ? 'No exercises yet — tap the pencil to add some.'
+          : lastSessionDate ? `Last: ${formatDate(lastSessionDate)}` : 'Never done'}
       </span>
 
       {/* Start button */}
       <motion.button
-        onClick={() => navigate(`/workout/${template.id}`)}
+        onClick={handleStart}
         whileTap={reduceMotion ? undefined : { scale: 0.96 }}
         transition={{ duration: 0.12, ease: [0.32, 0.72, 0, 1] }}
         className="mt-auto self-start font-body font-medium"

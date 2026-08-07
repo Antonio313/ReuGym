@@ -65,14 +65,49 @@ function StepBtn({ onClick, disabled, children }: { onClick: () => void; disable
   );
 }
 
-function NumInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+// Free-text while focused — no forced 0/1 injected mid-edit, no digits
+// silently appended to a coerced value. The field is purely local string
+// state until blur, when it's parsed and committed (or reverted to the last
+// good value if left empty/invalid); nothing about the caller's number
+// changes on every keystroke, which is what caused typing "8" after
+// clearing the field to produce "18" (a stray "1" from the old
+// parseInt('') || 1 default got baked into the controlled value first).
+function NumericField({
+  value, onCommit, min, allowDecimal = false, width = '4.5rem',
+}: {
+  value: number;
+  onCommit: (v: number) => void;
+  min?: number;
+  allowDecimal?: boolean;
+  width?: string;
+}) {
+  const [draft, setDraft] = useState(String(value));
+
+  // Re-sync from the parent's committed value — e.g. after a starting-weight
+  // commit gets snapped to the nearest dumbbell, `value` comes back
+  // different from what was typed, and the field should reflect that rather
+  // than the raw typed number. Only fires on a real value change, so it
+  // never interferes with in-progress typing (the parent hasn't re-rendered
+  // with a new value yet at that point).
+  useEffect(() => { setDraft(String(value)); }, [value]);
+
+  const commit = () => {
+    const trimmed = draft.trim();
+    if (trimmed === '') { setDraft(String(value)); return; }
+    const parsed = allowDecimal ? parseFloat(trimmed) : parseInt(trimmed, 10);
+    if (isNaN(parsed)) { setDraft(String(value)); return; }
+    const clamped = min != null ? Math.max(min, parsed) : parsed;
+    onCommit(clamped);
+  };
+
   return (
     <input
-      type="number" inputMode="numeric" value={value}
-      onChange={e => onChange(Math.max(1, parseInt(e.target.value) || 1))}
+      type="number" inputMode={allowDecimal ? 'decimal' : 'numeric'} value={draft}
+      onChange={e => setDraft(e.target.value)}
+      onBlur={commit}
       className="font-mono" data-numeric
       style={{
-        width: '4.5rem', padding: '0.5rem 0.75rem', textAlign: 'center',
+        width, padding: '0.5rem 0.75rem', textAlign: 'center',
         fontSize: 'var(--text-body)', background: 'var(--color-surface-2)',
         border: 'var(--border-thin)', borderRadius: 'var(--radius-md)',
         color: 'var(--color-text)', outline: 'none',
@@ -112,20 +147,7 @@ function RestPresets({ value, onChange }: { value: number; onChange: (v: number)
         ))}
       </div>
       <div className="flex items-center gap-2">
-        <input
-          type="number"
-          inputMode="numeric"
-          min={0}
-          value={value}
-          onChange={e => onChange(Math.max(0, parseInt(e.target.value) || 0))}
-          className="font-mono" data-numeric
-          style={{
-            width: '5rem', padding: '0.375rem 0.625rem', textAlign: 'center',
-            fontSize: 'var(--text-body)', background: 'var(--color-surface-2)',
-            border: 'var(--border-thin)', borderRadius: 'var(--radius-md)',
-            color: 'var(--color-text)', outline: 'none',
-          }}
-        />
+        <NumericField value={value} onCommit={onChange} min={0} width="5rem" />
         <span className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
           seconds{value === 0 ? ' (no rest)' : ''}
         </span>
@@ -150,7 +172,7 @@ function ExerciseConfigSheet({
   onSave: (entry: TemplateExercise, index?: number) => void;
   onClose: () => void;
 }) {
-  const { unit, toDisplay } = useUnit();
+  const { unit, toDisplay, toKg } = useUnit();
   const exerciseId = target.mode === 'add' ? target.exerciseId : exercises[target.index].exerciseId;
   const exercise = exerciseMap.get(exerciseId);
   const existingEntry = target.mode === 'edit' ? exercises[target.index] : undefined;
@@ -210,31 +232,33 @@ function ExerciseConfigSheet({
           <div>
             <FieldLabel>{draft.isTimed ? 'Duration range (sec)' : 'Rep range'}</FieldLabel>
             <div className="flex items-center gap-2">
-              <NumInput value={draft.repRange[0]}
-                onChange={v => setDraft(d => ({ ...d, repRange: [v, Math.max(v, d.repRange[1])] }))} />
+              <NumericField value={draft.repRange[0]} min={1}
+                onCommit={v => setDraft(d => ({ ...d, repRange: [v, d.repRange[1]] }))} />
               <span style={{ color: 'var(--color-text-muted)' }}>–</span>
-              <NumInput value={draft.repRange[1]}
-                onChange={v => setDraft(d => ({ ...d, repRange: [Math.min(d.repRange[0], v), v] }))} />
+              <NumericField value={draft.repRange[1]} min={1}
+                onCommit={v => setDraft(d => ({ ...d, repRange: [d.repRange[0], v] }))} />
             </div>
+            {draft.repRange[0] > draft.repRange[1] && (
+              <p className="font-body mt-1"
+                style={{ fontSize: 'var(--text-micro)', color: 'var(--color-regression)' }}>
+                {draft.repRange[0]}–{draft.repRange[1]} doesn't make sense — the first number should be lower.
+              </p>
+            )}
           </div>
 
           {!draft.isBodyweight && (
             <div>
-              <FieldLabel>Starting weight (kg)</FieldLabel>
-              <input
-                type="number" inputMode="decimal" value={draft.startingWeightKg}
-                onChange={e => setDraft(d => ({ ...d, startingWeightKg: parseFloat(e.target.value) || 0 }))}
-                onBlur={() => setDraft(d => ({ ...d, startingWeightKg: snapToNearestDumbbell(d.startingWeightKg) }))}
-                className="font-mono" data-numeric
-                style={{
-                  width: '6rem', padding: '0.5rem 0.75rem', fontSize: 'var(--text-body)',
-                  background: 'var(--color-surface-2)', border: 'var(--border-thin)',
-                  borderRadius: 'var(--radius-md)', color: 'var(--color-text)', outline: 'none',
-                }}
+              <FieldLabel>Starting weight ({unit})</FieldLabel>
+              <NumericField
+                value={toDisplay(draft.startingWeightKg)}
+                allowDecimal
+                min={0}
+                width="6rem"
+                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: snapToNearestDumbbell(toKg(v)) }))}
               />
               <p className="font-body mt-1"
                 style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
-                Snaps to nearest dumbbell on blur
+                Snaps to nearest dumbbell
               </p>
             </div>
           )}
@@ -441,6 +465,7 @@ function StretchConfigSheet({
   onSave: (item: DayStretch, target: StretchConfigTarget) => void;
   onClose: () => void;
 }) {
+  const { unit, toDisplay, toKg } = useUnit();
   const existingItem = target.mode === 'edit'
     ? (target.phase === 'pre' ? stretches.pre : stretches.post)[target.index]
     : undefined;
@@ -498,31 +523,33 @@ function StretchConfigSheet({
           <div>
             <FieldLabel>{draft.isTimed ? 'Duration range (sec)' : 'Rep range'}</FieldLabel>
             <div className="flex items-center gap-2">
-              <NumInput value={draft.repRange[0]}
-                onChange={v => setDraft(d => ({ ...d, repRange: [v, Math.max(v, d.repRange[1])] }))} />
+              <NumericField value={draft.repRange[0]} min={1}
+                onCommit={v => setDraft(d => ({ ...d, repRange: [v, d.repRange[1]] }))} />
               <span style={{ color: 'var(--color-text-muted)' }}>–</span>
-              <NumInput value={draft.repRange[1]}
-                onChange={v => setDraft(d => ({ ...d, repRange: [Math.min(d.repRange[0], v), v] }))} />
+              <NumericField value={draft.repRange[1]} min={1}
+                onCommit={v => setDraft(d => ({ ...d, repRange: [d.repRange[0], v] }))} />
             </div>
+            {draft.repRange[0] > draft.repRange[1] && (
+              <p className="font-body mt-1"
+                style={{ fontSize: 'var(--text-micro)', color: 'var(--color-regression)' }}>
+                {draft.repRange[0]}–{draft.repRange[1]} doesn't make sense — the first number should be lower.
+              </p>
+            )}
           </div>
 
           {!draft.isBodyweight && (
             <div>
-              <FieldLabel>Starting weight (kg)</FieldLabel>
-              <input
-                type="number" inputMode="decimal" value={draft.startingWeightKg}
-                onChange={e => setDraft(d => ({ ...d, startingWeightKg: parseFloat(e.target.value) || 0 }))}
-                onBlur={() => setDraft(d => ({ ...d, startingWeightKg: snapToNearestDumbbell(d.startingWeightKg) }))}
-                className="font-mono" data-numeric
-                style={{
-                  width: '6rem', padding: '0.5rem 0.75rem', fontSize: 'var(--text-body)',
-                  background: 'var(--color-surface-2)', border: 'var(--border-thin)',
-                  borderRadius: 'var(--radius-md)', color: 'var(--color-text)', outline: 'none',
-                }}
+              <FieldLabel>Starting weight ({unit})</FieldLabel>
+              <NumericField
+                value={toDisplay(draft.startingWeightKg)}
+                allowDecimal
+                min={0}
+                width="6rem"
+                onCommit={v => setDraft(d => ({ ...d, startingWeightKg: snapToNearestDumbbell(toKg(v)) }))}
               />
               <p className="font-body mt-1"
                 style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
-                Snaps to nearest dumbbell on blur
+                Snaps to nearest dumbbell
               </p>
             </div>
           )}

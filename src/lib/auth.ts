@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { enqueueSync, syncNow } from './sync';
 
 const SESSION_KEY = 'reugym_session';
 
@@ -67,15 +68,14 @@ export function signOut(): void {
 }
 
 // Optimistic: updates the local session immediately (so the UI reflects the
-// change offline/instantly), then best-effort pushes to Supabase. Unlike
-// workout data this preference isn't routed through the offline sync queue —
-// if the push fails while offline, the next fresh sign-in on another device
-// will still reflect whatever was last successfully saved to Supabase.
+// change offline/instantly), then routes through the same offline queue as
+// every other write — so a change made without connectivity isn't lost, it
+// just syncs on the next retry/poll/reconnect like everything else.
 export async function updateWeightUnit(userId: string, unit: WeightUnit): Promise<void> {
   const current = getLocalSession();
   if (current && current.id === userId) {
     setLocalSession({ ...current, weightUnit: unit });
   }
-  const { error } = await supabase.from('users').update({ weight_unit: unit }).eq('id', userId);
-  if (error) throw new Error(error.message);
+  await enqueueSync(userId, 'users', 'upsert', { id: userId, weight_unit: unit });
+  await syncNow(userId);
 }

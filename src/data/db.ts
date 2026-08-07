@@ -107,7 +107,8 @@ export type SupabaseTableName =
   | 'exercise_prefs'
   | 'template_exercises'
   | 'template_stretches'
-  | 'custom_exercises';
+  | 'custom_exercises'
+  | 'users';
 
 export type ReplaceAllPayload = {
   templateId: string;

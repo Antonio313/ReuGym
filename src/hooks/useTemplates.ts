@@ -35,14 +35,20 @@ export function useTemplate(templateId: string): [WorkoutTemplate | undefined, (
     if (!meta) return undefined;
 
     const db = getDB(user.id);
-    const rows = await db.templateExercises
-      .where('[userId+templateId]')
-      .equals([user.id, templateId])
-      .toArray();
+    const versionKey = `${user.id}_${templateId}`;
+    const [rows, version] = await Promise.all([
+      db.templateExercises.where('[userId+templateId]').equals([user.id, templateId]).toArray(),
+      db.templateVersions.get(versionKey),
+    ]);
 
     rows.sort((a, b) => a.position - b.position);
 
-    const exercises = rows.length > 0 ? rows.map(dexieToTemplateExercise) : meta.exercises;
+    // saveTemplate always writes a templateVersions row, even when the
+    // resulting exercise list is empty — its presence is what actually
+    // means "the user has explicitly saved this template," as opposed to
+    // "never customized." Using rows.length alone couldn't tell those apart,
+    // so deleting every exercise silently brought the static defaults back.
+    const exercises = version ? rows.map(dexieToTemplateExercise) : meta.exercises;
     return { ...meta, exercises };
   }, [templateId, user?.id, refreshToken]);
 
