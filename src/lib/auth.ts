@@ -73,12 +73,18 @@ export function signOut(): void {
 // change offline/instantly), then routes through the same offline queue as
 // every other write — so a change made without connectivity isn't lost, it
 // just syncs on the next retry/poll/reconnect like everything else.
+//
+// `email` is included in every partial upsert here even though it never
+// changes — Postgres validates NOT NULL constraints while building the
+// candidate row for an upsert *before* it checks whether a conflict
+// redirects it to UPDATE, so omitting any NOT NULL column 400s even when
+// the row already exists and that column is untouched.
 export async function updateWeightUnit(userId: string, unit: WeightUnit): Promise<void> {
   const current = getLocalSession();
   if (current && current.id === userId) {
     setLocalSession({ ...current, weightUnit: unit });
   }
-  await enqueueSync(userId, 'users', 'upsert', { id: userId, weight_unit: unit });
+  await enqueueSync(userId, 'users', 'upsert', { id: userId, email: current?.email, weight_unit: unit });
   await syncNow(userId);
 }
 
@@ -87,6 +93,6 @@ export async function markOnboardingSeen(userId: string): Promise<void> {
   if (current && current.id === userId) {
     setLocalSession({ ...current, hasSeenOnboarding: true });
   }
-  await enqueueSync(userId, 'users', 'upsert', { id: userId, has_seen_onboarding: true });
+  await enqueueSync(userId, 'users', 'upsert', { id: userId, email: current?.email, has_seen_onboarding: true });
   await syncNow(userId);
 }

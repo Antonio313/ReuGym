@@ -211,12 +211,22 @@ export default function WorkoutActive() {
   // session by then, so there's no other write to piggyback on) and inlined
   // into finishWorkout's own update for the pre-stretch/workout portion.
   const persistSessionNotes = async (notes: string) => {
-    if (!sessionId || !notes) return;
+    if (!sessionId || !notes || !template) return;
     const user = getLocalSession();
     if (!user) return;
     const db = getDB(user.id);
     await db.sessions.update(sessionId, { notes });
-    await enqueueSync(user.id, 'workout_sessions', 'upsert', { id: sessionId, user_id: user.id, notes });
+    // template_id/started_at are NOT NULL — Postgres validates that on the
+    // candidate row an upsert builds before it even checks for a conflict,
+    // so a partial payload 400s even though this row already exists and
+    // those columns aren't changing here.
+    await enqueueSync(user.id, 'workout_sessions', 'upsert', {
+      id: sessionId,
+      user_id: user.id,
+      template_id: template.id,
+      started_at: sessionStartedAt,
+      notes,
+    });
   };
 
   const finishWorkout = async () => {
