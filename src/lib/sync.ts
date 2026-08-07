@@ -197,10 +197,19 @@ export async function enqueueSync(
 
 // ─── Internal ─────────────────────────────────────────────────────
 
+// Tables whose primary key isn't a plain `id` — on_conflict must match the
+// actual constraint exactly or Postgres rejects the upsert outright (400,
+// "no unique or exclusion constraint matching the ON CONFLICT specification").
+// See migrations 001 (custom_exercises: id+user_id) for the source of truth.
+const COMPOSITE_KEY_TABLES: Partial<Record<SupabaseTableName, string>> = {
+  exercise_prefs:   'user_id,exercise_id',
+  custom_exercises: 'id,user_id',
+};
+
 async function applyOperation(op: SyncOperation, userId: string): Promise<void> {
   if (op.operation === 'upsert') {
     const payload = op.payload as Record<string, unknown>;
-    const onConflict = op.table === 'exercise_prefs' ? 'user_id,exercise_id' : 'id';
+    const onConflict = COMPOSITE_KEY_TABLES[op.table] ?? 'id';
     const { error } = await supabase.from(op.table).upsert(payload, { onConflict });
     if (error) throw new Error(error.message);
     return;
