@@ -1,5 +1,6 @@
 import { motion, useReducedMotion } from 'motion/react';
 import { VideoReference } from '@/components/workout/VideoReference';
+import { useUnit } from '@/hooks/useUnit';
 import type { Exercise } from '@/types';
 
 type Props = {
@@ -21,6 +22,7 @@ function formatTime(seconds: number): string {
 export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExercise, nextTargetWeight, nextTargetReps, onSkip }: Props) {
   const progress = totalSeconds > 0 ? secondsRemaining / totalSeconds : 0;
   const reduceMotion = useReducedMotion();
+  const { unit, toDisplay } = useUnit();
   const urgent = secondsRemaining <= 5 && secondsRemaining > 0;
 
   return (
@@ -101,7 +103,7 @@ export function RestTimer({ secondsRemaining, totalSeconds, nextLabel, nextExerc
           >
             {nextTargetWeight == null
               ? `Bodyweight · ${nextTargetReps[0]}–${nextTargetReps[1]} reps`
-              : `${nextTargetWeight}kg × ${nextTargetReps[0]}–${nextTargetReps[1]}`}
+              : `${toDisplay(nextTargetWeight)}${unit} × ${nextTargetReps[0]}–${nextTargetReps[1]}`}
           </p>
         )}
 

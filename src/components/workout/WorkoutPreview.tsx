@@ -1,4 +1,6 @@
 import { ArrowLeft } from '@phosphor-icons/react';
+import { useUnit } from '@/hooks/useUnit';
+import type { WeightUnit } from '@/lib/auth';
 import type { WorkoutTemplate, Exercise, ExercisePref, DayStretch } from '@/types';
 
 type Props = {
@@ -11,10 +13,15 @@ type Props = {
   onBack: () => void;
 };
 
-function weightLabel(exercise: Exercise, pref: ExercisePref | undefined): string {
+function weightLabel(
+  exercise: Exercise,
+  pref: ExercisePref | undefined,
+  unit: WeightUnit,
+  toDisplay: (kg: number) => number,
+): string {
   if (exercise.isBodyweight) return 'Bodyweight';
-  const w = pref?.startingWeightKg ?? exercise.startingWeightKg;
-  return `${w}kg`;
+  const w = pref?.startingWeightKg ?? exercise.startingWeightKg ?? 0;
+  return `${toDisplay(w)}${unit}`;
 }
 
 function formatRepRange(min: number, max: number, isTimed = false): string {
@@ -23,6 +30,7 @@ function formatRepRange(min: number, max: number, isTimed = false): string {
 }
 
 export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExMap, prefsMap, onBegin, onBack }: Props) {
+  const { unit, toDisplay } = useUnit();
   return (
     <div
       className="flex flex-col min-h-dvh mx-auto"
@@ -127,7 +135,7 @@ export function WorkoutPreview({ template, exerciseMap, dayStretches, stretchExM
                       {te.sets}×{formatRepRange(te.repRange[0], te.repRange[1], ex.isTimed)}
                     </p>
                     <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-faint)' }}>
-                      {weightLabel(ex, pref)}
+                      {weightLabel(ex, pref, unit, toDisplay)}
                     </p>
                   </div>
                 </div>

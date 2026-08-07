@@ -131,15 +131,46 @@ export async function pushQueue(userId: string): Promise<{ success: number; fail
   return { success, failed };
 }
 
+// Several triggers (enqueueSync, the online/visibility listener, the
+// foreground poll) can all decide to push around the same moment. Dedup to
+// one in-flight pushQueue per user so they share a single pass over the
+// queue instead of racing over the same rows.
+const inFlightPush = new Map<string, Promise<{ success: number; failed: number }>>();
+
+function pushQueueDeduped(userId: string): Promise<{ success: number; failed: number }> {
+  const existing = inFlightPush.get(userId);
+  if (existing) return existing;
+
+  const promise = pushQueue(userId).finally(() => {
+    if (inFlightPush.get(userId) === promise) inFlightPush.delete(userId);
+  });
+  inFlightPush.set(userId, promise);
+  return promise;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 // Pushes the queue then runs a delta sync. Called on reconnect and app startup.
 export async function syncAll(userId: string): Promise<void> {
   try {
-    await pushQueue(userId);
+    await pushQueueDeduped(userId);
   } catch (err) {
     // Queue push failure should not prevent delta sync
     console.warn('pushQueue error during syncAll:', err);
   }
   await deltaSync(userId);
+}
+
+// Best-effort "push right now" for a caller that wants to confirm a write
+// actually reached Supabase before moving on (e.g. logging a set), bounded
+// so a bad connection can't hang the UI. The underlying push keeps running
+// even after this times out — a caller that gives up waiting doesn't cancel
+// the attempt, it just stops blocking on it. Never throws.
+export async function syncNow(userId: string, timeoutMs = 4000): Promise<void> {
+  if (!navigator.onLine) return;
+  await Promise.race([pushQueueDeduped(userId).catch(() => undefined), sleep(timeoutMs)]);
 }
 
 // Enqueues a write operation for later sync to Supabase.
@@ -211,14 +242,33 @@ async function applyOperation(op: SyncOperation, userId: string): Promise<void> 
 
 // ─── Online listener setup ────────────────────────────────────────
 
+// iOS gives web apps no background execution at all — there's no service
+// worker Background Sync API on Safari/iOS (still true as of writing), so a
+// queued write can only ever be pushed while this page is actually alive
+// and running JS. These listeners are that mechanism: an 'online' event
+// (real reconnect), a visibility change (app resumed from background), and
+// a plain foreground poll (rides out flaky gym wifi without needing a real
+// disconnect to have happened) are the only opportunities we get.
+const FOREGROUND_POLL_MS = 25_000;
+
 let syncUserId: string | null = null;
 let activeHandler: (() => void) | null = null;
+let activeVisibilityHandler: (() => void) | null = null;
+let activePollId: ReturnType<typeof setInterval> | null = null;
 
 export function registerOnlineSync(userId: string): () => void {
-  // Remove any existing listener before adding a new one
+  // Remove any existing listeners before adding new ones
   if (activeHandler) {
     window.removeEventListener('online', activeHandler);
     activeHandler = null;
+  }
+  if (activeVisibilityHandler) {
+    document.removeEventListener('visibilitychange', activeVisibilityHandler);
+    activeVisibilityHandler = null;
+  }
+  if (activePollId) {
+    clearInterval(activePollId);
+    activePollId = null;
   }
 
   syncUserId = userId;
@@ -227,12 +277,29 @@ export function registerOnlineSync(userId: string): () => void {
     if (syncUserId) void syncAll(syncUserId);
   };
 
+  // A PWA that's simply backgrounded and resumed (not fully reloaded) never
+  // fires 'online' if the network stayed connected the whole time — this
+  // catches that case so a queued write from another tab/device visit gets
+  // pushed/pulled as soon as the app regains focus, not just on reconnect.
+  const visibilityHandler = () => {
+    if (document.visibilityState === 'visible' && navigator.onLine) handler();
+  };
+
   activeHandler = handler;
+  activeVisibilityHandler = visibilityHandler;
   window.addEventListener('online', handler);
+  document.addEventListener('visibilitychange', visibilityHandler);
+
+  activePollId = setInterval(() => {
+    if (document.visibilityState === 'visible' && navigator.onLine) handler();
+  }, FOREGROUND_POLL_MS);
 
   return () => {
     window.removeEventListener('online', handler);
+    document.removeEventListener('visibilitychange', visibilityHandler);
+    if (activePollId) { clearInterval(activePollId); activePollId = null; }
     if (activeHandler === handler) activeHandler = null;
+    if (activeVisibilityHandler === visibilityHandler) activeVisibilityHandler = null;
     if (syncUserId === userId) syncUserId = null;
   };
 }

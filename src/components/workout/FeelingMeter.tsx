@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { saveExercisePref } from '@/hooks/useExercisePref';
+import { useUnit } from '@/hooks/useUnit';
 import type { Exercise, ExercisePref } from '@/types';
 
 type FeelingLevel = 'easy' | 'medium-easy' | 'fair' | 'fairly-difficult' | 'difficult';
@@ -42,6 +43,7 @@ type Props = {
 };
 
 export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartingReps, sessionId, onDone }: Props) {
+  const { unit, toDisplay } = useUnit();
   const [selected, setSelected] = useState<FeelingLevel | null>(null);
   const [saving, setSaving] = useState(false);
   const [avgRIR, setAvgRIR] = useState<number | null>(null);
@@ -165,10 +167,10 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
                 Weight
               </span>
               <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-h3)', color: 'var(--color-accent)' }}>
-                {suggestedWeight} kg
+                {toDisplay(suggestedWeight)} {unit}
               </span>
               <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>
-                ({weightDelta >= 0 ? '+' : ''}{weightDelta} kg)
+                ({weightDelta >= 0 ? '+' : ''}{toDisplay(weightDelta)} {unit})
               </span>
             </div>
           )}

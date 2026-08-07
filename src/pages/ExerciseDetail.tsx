@@ -6,6 +6,7 @@ import { EmptyState } from '@/components/shared/EmptyState';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { useExercises, useStretches } from '@/hooks/useExercises';
+import { useUnit } from '@/hooks/useUnit';
 import type { LoggedSet, WorkoutSession } from '@/types';
 
 // ─── Helpers ────────────────────────────────────────────────────
@@ -171,6 +172,7 @@ function SessionRow({
   isBodyweight: boolean;
   isTimed: boolean;
 }) {
+  const { unit, toDisplay } = useUnit();
   const workSets = sets.filter((s) => !s.isWarmup);
   const best = isBodyweight ? topReps(sets) : topSet(sets);
   const hasPR = workSets.some((s) => s.isPR);
@@ -202,7 +204,7 @@ function SessionRow({
             ? `${best.reps}s`
             : isBodyweight
               ? `${best.reps} reps`
-              : `${best.weightKg}kg × ${best.reps}`}
+              : `${toDisplay(best.weightKg)}${unit} × ${best.reps}`}
         </p>
       )}
     </div>
@@ -218,6 +220,7 @@ export default function ExerciseDetail() {
   const allExercises = useExercises();
   const allStretchExercises = useStretches();
   const exercise = [...allExercises, ...allStretchExercises].find((e) => e.id === exerciseId);
+  const { unit, toDisplay } = useUnit();
 
   type DetailData = {
     allSets: LoggedSet[];
@@ -321,7 +324,7 @@ export default function ExerciseDetail() {
     if (!best) return [];
     return [{
       label: formatShortDate(s.startedAt),
-      value: isBodyweight ? best.reps : best.weightKg,
+      value: isBodyweight ? best.reps : toDisplay(best.weightKg),
     }];
   });
 
@@ -400,7 +403,7 @@ export default function ExerciseDetail() {
                 Starting weight
               </p>
               <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-                {exercise.startingWeightKg}kg
+                {toDisplay(exercise.startingWeightKg ?? 0)}{unit}
               </p>
             </div>
           )}
@@ -429,7 +432,7 @@ export default function ExerciseDetail() {
                 ? `${prSet.reps}s`
                 : isBodyweight
                   ? `${prSet.reps} reps`
-                  : `${prSet.weightKg}kg × ${prSet.reps}`}
+                  : `${toDisplay(prSet.weightKg)}${unit} × ${prSet.reps}`}
             </p>
             <div className="flex items-center gap-3 mt-2">
               {prSession && (
@@ -439,7 +442,7 @@ export default function ExerciseDetail() {
               )}
               {oneRM && (
                 <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-                  · Est. 1RM: <span className="font-mono" data-numeric>{oneRM}kg</span>
+                  · Est. 1RM: <span className="font-mono" data-numeric>{toDisplay(oneRM)}{unit}</span>
                 </p>
               )}
             </div>

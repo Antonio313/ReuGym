@@ -21,6 +21,7 @@ import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
 import { resolveStartingWeight } from '@/lib/weights';
+import { useUnit } from '@/hooks/useUnit';
 import type { ActiveSet, Exercise, ExercisePref, SubstituteConfig } from '@/types';
 
 type WorkoutPhase = 'preview' | 'pre-stretch' | 'workout' | 'post-stretch' | 'complete';
@@ -37,6 +38,7 @@ export default function WorkoutActive() {
   const { templateId } = useParams<{ templateId: string }>();
   const navigate = useNavigate();
 
+  const { unit, toDisplay } = useUnit();
   const [phase, setPhase] = useState<WorkoutPhase>('preview');
   const [stretchIndex, setStretchIndex] = useState(0);
   const [completingAfterRest, setCompletingAfterRest] = useState(false);
@@ -901,7 +903,7 @@ export default function WorkoutActive() {
                       </p>
                       <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
                         {sub.sets}×{formatRepRange(sub.repRange[0], sub.repRange[1])}
-                        {' · '}{sub.startingWeightKg > 0 ? `${sub.startingWeightKg}kg` : 'BW'}
+                        {' · '}{sub.startingWeightKg > 0 ? `${toDisplay(sub.startingWeightKg)}${unit}` : 'BW'}
                         {' · '}{sub.restSeconds}s
                       </p>
                     </div>

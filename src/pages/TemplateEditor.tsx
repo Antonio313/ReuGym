@@ -13,6 +13,7 @@ import { useExercises, useStretches } from '@/hooks/useExercises';
 import { useDayStretches, saveDayStretches } from '@/hooks/useDayStretches';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { snapToNearestDumbbell } from '@/lib/weights';
+import { useUnit } from '@/hooks/useUnit';
 import type { TemplateExercise, WorkoutTemplate, DayStretch, Exercise, SubstituteConfig } from '@/types';
 
 const REST_PRESETS = [45, 60, 90, 120, 150, 180];
@@ -149,6 +150,7 @@ function ExerciseConfigSheet({
   onSave: (entry: TemplateExercise, index?: number) => void;
   onClose: () => void;
 }) {
+  const { unit, toDisplay } = useUnit();
   const exerciseId = target.mode === 'add' ? target.exerciseId : exercises[target.index].exerciseId;
   const exercise = exerciseMap.get(exerciseId);
   const existingEntry = target.mode === 'edit' ? exercises[target.index] : undefined;
@@ -268,7 +270,7 @@ function ExerciseConfigSheet({
                     <p className="font-mono" data-numeric
                       style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}>
                       {sub.sets}×{formatRepRange(sub.repRange[0], sub.repRange[1])}
-                      {' · '}{(subEx?.isBodyweight ?? false) ? 'BW' : `${sub.startingWeightKg}kg`}
+                      {' · '}{(subEx?.isBodyweight ?? false) ? 'BW' : `${toDisplay(sub.startingWeightKg)}${unit}`}
                       {' · '}{sub.restSeconds}s
                     </p>
                   </div>
@@ -343,6 +345,7 @@ function DraggableExerciseRow({
   onDragEnd: () => void;
 }) {
   const controls = useDragControls();
+  const { unit, toDisplay } = useUnit();
   const exercise = exerciseMap.get(entry.exerciseId);
   const name = exercise?.name ?? entry.exerciseId;
   const isLast = index === total - 1;
@@ -380,7 +383,7 @@ function DraggableExerciseRow({
             <p className="font-mono" data-numeric
               style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', marginTop: '0.125rem' }}>
               {entry.sets}×{formatRepRange(entry.repRange[0], entry.repRange[1], entry.isTimed)}
-              {' · '}{entry.isBodyweight ? 'BW' : `${entry.startingWeightKg}kg`}
+              {' · '}{entry.isBodyweight ? 'BW' : `${toDisplay(entry.startingWeightKg)}${unit}`}
               {' · '}{entry.restSeconds}s
             </p>
             {(entry.substitutes?.length ?? 0) > 0 && (
@@ -573,6 +576,7 @@ function DraggableStretchRow({
   onDragEnd: () => void;
 }) {
   const controls = useDragControls();
+  const { unit, toDisplay } = useUnit();
   const ex = stretchExMap.get(item.exerciseId);
 
   return (
@@ -596,7 +600,7 @@ function DraggableStretchRow({
           <p className="font-mono" data-numeric
             style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', marginTop: '0.125rem' }}>
             {item.sets > 1 ? `${item.sets}×` : ''}{formatRepRange(item.repRange[0], item.repRange[1], item.isTimed)}
-            {!item.isBodyweight && item.startingWeightKg > 0 && ` · ${item.startingWeightKg}kg`}
+            {!item.isBodyweight && item.startingWeightKg > 0 && ` · ${toDisplay(item.startingWeightKg)}${unit}`}
             {item.restSeconds > 0 && ` · ${item.restSeconds}s rest`}
           </p>
         </div>

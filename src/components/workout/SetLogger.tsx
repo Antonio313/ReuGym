@@ -2,10 +2,11 @@ import { useState, useEffect, useRef } from 'react';
 import { nanoid } from 'nanoid';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
-import { enqueueSync } from '@/lib/sync';
+import { enqueueSync, syncNow } from '@/lib/sync';
 import { checkIsPR } from '@/lib/pr';
 import { useLastSetData } from '@/hooks/useLastSetData';
 import { useExercisePref } from '@/hooks/useExercisePref';
+import { useUnit } from '@/hooks/useUnit';
 import { haptics } from '@/lib/haptics';
 import { playSetLogged } from '@/lib/audio';
 import { NumericKeypad } from '@/components/shared/NumericKeypad';
@@ -57,6 +58,7 @@ export function SetLogger({
 
   const lastData = useLastSetData(exercise.id, setNumber, sessionId);
   const exercisePref = useExercisePref(exercise.id);
+  const { unit, toDisplay, toKg } = useUnit();
 
   // Reset fields when set number or exercise changes
   useEffect(() => {
@@ -84,7 +86,7 @@ export function SetLogger({
       ? lastData.reps
       : Math.max(exercisePref?.startingReps ?? 0, templateExercise.repRange[0]);
 
-  const resolvedWeight = weightStr !== '' ? parseFloat(weightStr) : defaultWeightKg;
+  const resolvedWeightKg = weightStr !== '' ? toKg(parseFloat(weightStr)) : defaultWeightKg;
   const resolvedReps = templateExercise.isTimed
     ? (timerLocked ?? defaultReps)
     : (repsStr !== '' ? parseInt(repsStr, 10) : defaultReps);
@@ -119,7 +121,7 @@ export function SetLogger({
   };
 
   const handleLogSet = async () => {
-    const weight = resolvedWeight;
+    const weight = resolvedWeightKg;
     const reps = resolvedReps;
 
     if (!isWarmup && weight <= 0 && !templateExercise.isBodyweight) {
@@ -198,6 +200,16 @@ export function SetLogger({
       },
       isPR,
     );
+
+    // Give the push a real chance to finish before this interaction ends —
+    // iOS has no background execution, so anything not confirmed before the
+    // tab is backgrounded/closed (e.g. swiping straight to the next
+    // machine) may never sync. This is deliberately after the UI has
+    // already moved on (haptics fired, fields cleared, rest timer started)
+    // so it doesn't feel like a delay — the promise chain just keeps this
+    // page alive a little longer in the background to finish the network
+    // call.
+    if (user) await syncNow(user.id);
   };
 
   const numpadValue = activeField === 'weight' ? weightStr : repsStr;
@@ -272,7 +284,7 @@ export function SetLogger({
           {lastData ? (
             <p className="font-mono" data-numeric style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
               Last:{' '}
-              {lastData.weightKg > 0 ? `${lastData.weightKg}kg × ` : ''}
+              {lastData.weightKg > 0 ? `${toDisplay(lastData.weightKg)}${unit} × ` : ''}
               {exercise.isTimed ? `${lastData.reps}s` : `${lastData.reps} reps`}
             </p>
           ) : lastData === null ? (
@@ -307,10 +319,10 @@ export function SetLogger({
                   minHeight: '2rem',
                 }}
               >
-                {weightStr || String(defaultWeightKg)}
+                {weightStr || String(toDisplay(defaultWeightKg))}
               </span>
               <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
-                kg
+                {unit}
               </span>
             </button>
           </div>

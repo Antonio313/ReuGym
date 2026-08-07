@@ -1,4 +1,5 @@
 import { motion, useReducedMotion, type Variants } from 'motion/react';
+import { useUnit } from '@/hooks/useUnit';
 
 export type CompletionStats = {
   durationSeconds: number;
@@ -24,6 +25,7 @@ function formatDuration(seconds: number): string {
 
 export function WorkoutComplete({ stats, onHome }: Props) {
   const reduceMotion = useReducedMotion();
+  const { unit, toDisplay } = useUnit();
 
   const container: Variants = {
     hidden: {},
@@ -96,7 +98,7 @@ export function WorkoutComplete({ stats, onHome }: Props) {
         />
         <StatCard
           label="Volume"
-          value={`${stats.totalVolumeKg.toLocaleString()}kg`}
+          value={`${toDisplay(stats.totalVolumeKg).toLocaleString()}${unit}`}
         />
       </motion.div>
 

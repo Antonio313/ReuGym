@@ -1,7 +1,7 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
-import { enqueueSync } from '@/lib/sync';
+import { enqueueSync, syncNow } from '@/lib/sync';
 import { exercises as staticExercises } from '@/data/exercises';
 import { stretches as staticStretches } from '@/data/stretches';
 import type { Exercise, ExerciseCategory, ExerciseType, MuscleGroup } from '@/types';
@@ -108,6 +108,11 @@ export async function createExercise(exercise: Exercise): Promise<void> {
   });
 
   await enqueueSync(user.id, 'custom_exercises', 'upsert', exerciseToSnakeRow(exercise, user.id));
+  // Confirm it actually reached Supabase before the save flow reports done —
+  // these edits happen outside a workout session, sometimes right before
+  // closing the app, so there's no later opportunity (rest timer, next set)
+  // for a background push to catch up.
+  await syncNow(user.id);
 }
 
 export async function updateExercise(exercise: Exercise): Promise<void> {
@@ -122,6 +127,7 @@ export async function deleteCustomExercise(id: string): Promise<void> {
   const db = getDB(user.id);
   await db.customExercises.delete(id);
   await enqueueSync(user.id, 'custom_exercises', 'delete', { id });
+  await syncNow(user.id);
 }
 
 export function isStaticExercise(id: string): boolean {

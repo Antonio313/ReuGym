@@ -1,7 +1,7 @@
 import { useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { getDB } from '@/data/db';
-import { initialSync, deltaSync, registerOnlineSync } from '@/lib/sync';
+import { initialSync, syncAll, registerOnlineSync } from '@/lib/sync';
 
 type SyncState = 'checking' | 'syncing' | 'ready' | 'error';
 
@@ -38,8 +38,9 @@ export function SyncGate({ children }: { children: ReactNode }) {
       }
     } else {
       setSyncState('ready');
-      // Delta sync in the background — don't block the UI
-      if (navigator.onLine) void deltaSync(userId);
+      // Push anything queued locally (e.g. from a prior offline/background
+      // session) before pulling — don't block the UI on either.
+      if (navigator.onLine) void syncAll(userId);
     }
 
     // Register online listener for the rest of the session

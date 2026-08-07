@@ -2,7 +2,7 @@ import { nanoid } from 'nanoid';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
 import { getDB, type DexieTemplateStretch } from '@/data/db';
-import { enqueueSync } from '@/lib/sync';
+import { enqueueSync, syncNow } from '@/lib/sync';
 import type { DayStretch } from '@/types';
 
 type DayStretchData = { pre: DayStretch[]; post: DayStretch[] };
@@ -129,4 +129,6 @@ export async function saveDayStretches(
       rows: postRows.map((r) => r.snake), version: newVersionPost,
     }),
   ]);
+
+  await syncNow(user.id);
 }

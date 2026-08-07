@@ -12,6 +12,7 @@ import StyleGuide from '@/pages/StyleGuide';
 import TemplateEditor from '@/pages/TemplateEditor';
 import CreateExercise from '@/pages/CreateExercise';
 import SyncDebug from '@/pages/SyncDebug';
+import Settings from '@/pages/Settings';
 import SignIn from '@/pages/SignIn';
 import SignUp from '@/pages/SignUp';
 
@@ -69,6 +70,7 @@ function AppRoutes() {
         <Route path="/stretch/new"               element={<Navigate to="/exercise/new?isStretch=true" replace />} />
         <Route path="/stretch/:id/edit"          element={<StretchEditRedirect />} />
         <Route path="/sync-debug"                element={<SyncDebug />} />
+        <Route path="/settings"                  element={<Settings />} />
         <Route path="/signin"                    element={<SignIn />} />
         <Route path="/signup"                    element={<SignUp />} />
       </Routes>

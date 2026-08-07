@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
 import { getDB, type DexieTemplateExercise } from '@/data/db';
-import { enqueueSync } from '@/lib/sync';
+import { enqueueSync, syncNow } from '@/lib/sync';
 import { templates as staticTemplates, templateMap as defaultTemplateMap } from '@/data/templates';
 import type { WorkoutTemplate, TemplateExercise, SubstituteConfig } from '@/types';
 
@@ -117,6 +117,12 @@ export async function saveTemplate(template: WorkoutTemplate): Promise<void> {
     rows:       rows.map((r) => r.snake),
     version:    newVersion,
   });
+  // Editing a template often happens outside a workout session (no later
+  // rest-timer/set-logging moment to catch a background push) — confirm it
+  // actually reached Supabase now. Callers that already fire this off in
+  // the background (e.g. drag-reorder) aren't slowed down by this; nothing
+  // here blocks the local Dexie write or the live-query UI update above.
+  await syncNow(user.id);
 }
 
 // useTemplates returns all static templates — used by WorkoutHistory for display names
@@ -140,6 +146,7 @@ export async function resetTemplate(_id: string): Promise<void> {
     rows:       [],
     version:    0,
   });
+  await syncNow(user.id);
 }
 
 // useEffect-based variant for components that can't use useLiveQuery directly

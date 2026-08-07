@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Plus } from '@phosphor-icons/react';
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from '@/components/ui/drawer';
 import { useExercises } from '@/hooks/useExercises';
+import { useUnit } from '@/hooks/useUnit';
 import type { ExerciseCategory } from '@/types';
 
 const CATEGORY_LABELS: Record<ExerciseCategory, string> = {
@@ -138,6 +139,7 @@ function ExerciseRow({
   already: boolean;
   onSelect: () => void;
 }) {
+  const { unit, toDisplay } = useUnit();
   return (
     <button
       disabled={already}
@@ -157,7 +159,7 @@ function ExerciseRow({
           style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
         >
           {exercise.defaultRepRange ? `${exercise.defaultRepRange[0]}–${exercise.defaultRepRange[1]} reps` : ''}
-          {exercise.isBodyweight ? ' · Bodyweight' : exercise.startingWeightKg ? ` · ${exercise.startingWeightKg}kg start` : ''}
+          {exercise.isBodyweight ? ' · Bodyweight' : exercise.startingWeightKg ? ` · ${toDisplay(exercise.startingWeightKg)}${unit} start` : ''}
           {exercise.notes ? ` · ${exercise.notes}` : ''}
         </span>
       </span>

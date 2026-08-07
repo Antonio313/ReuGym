@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { SignOut } from '@phosphor-icons/react';
+import { SignOut, Gear } from '@phosphor-icons/react';
 import { useAuth } from '@/context/AuthContext';
 import { useSyncStatus } from '@/hooks/useSyncStatus';
 
@@ -11,25 +11,28 @@ type HeaderProps = {
 function SyncDot() {
   const { status, retry } = useSyncStatus();
 
+  // Three-color model: green = synced, orange = a write is queued or
+  // actively pushing/pulling, red = actually stuck (offline or failed) — the
+  // dot is always visible so a glance confirms green, rather than only
+  // appearing when something's wrong.
   const colors: Record<typeof status, string> = {
-    synced:  'transparent',
-    offline: 'var(--color-text-muted)',
+    synced:  'var(--color-success)',
     syncing: 'var(--color-accent)',
     pending: 'var(--color-accent)',
+    offline: 'var(--color-regression)',
     error:   'var(--color-regression)',
   };
 
-  if (status === 'synced') return null;
-
-  const clickable = status === 'error' || status === 'pending';
+  const clickable = status === 'error' || status === 'pending' || status === 'offline';
 
   return (
     <button
       onClick={clickable ? () => void retry() : undefined}
       title={
-        status === 'offline' ? 'Offline — changes saved locally' :
+        status === 'synced'  ? 'Synced' :
         status === 'syncing' ? 'Syncing…' :
-        status === 'pending' ? 'Changes waiting to sync — tap to retry' :
+        status === 'offline' ? 'Offline — changes saved locally, tap to retry' :
+        status === 'pending' ? 'Syncing…' :
         'Sync error — tap to retry'
       }
       style={{
@@ -40,7 +43,7 @@ function SyncDot() {
         border: 'none',
         padding: 0,
         cursor: clickable ? 'pointer' : 'default',
-        animation: status === 'syncing' ? 'pulse 1.2s ease-in-out infinite' : 'none',
+        animation: status === 'syncing' || status === 'pending' ? 'pulse 1.2s ease-in-out infinite' : 'none',
         flexShrink: 0,
       }}
     />
@@ -84,13 +87,22 @@ export function Header({ subtitle }: HeaderProps) {
         </div>
         <SyncDot />
       </div>
-      <button
-        onClick={handleLogout}
-        aria-label="Log out"
-        style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}
-      >
-        <SignOut size={20} />
-      </button>
+      <div className="flex items-center gap-1">
+        <button
+          onClick={() => navigate('/settings')}
+          aria-label="Settings"
+          style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}
+        >
+          <Gear size={20} />
+        </button>
+        <button
+          onClick={handleLogout}
+          aria-label="Log out"
+          style={{ color: 'var(--color-text-faint)', padding: '0.25rem' }}
+        >
+          <SignOut size={20} />
+        </button>
+      </div>
     </header>
   );
 }

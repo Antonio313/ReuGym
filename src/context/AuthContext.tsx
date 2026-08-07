@@ -4,7 +4,9 @@ import {
   signIn as authSignIn,
   signUp as authSignUp,
   signOut as authSignOut,
+  updateWeightUnit as authUpdateWeightUnit,
   type AuthUser,
+  type WeightUnit,
 } from '@/lib/auth';
 
 type AuthContextValue = {
@@ -13,6 +15,7 @@ type AuthContextValue = {
   signIn: (email: string) => Promise<AuthUser>;
   signUp: (email: string) => Promise<AuthUser>;
   signOut: () => void;
+  setWeightUnit: (unit: WeightUnit) => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -43,9 +46,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
+  const handleSetWeightUnit = async (unit: WeightUnit): Promise<void> => {
+    setUser((u) => (u ? { ...u, weightUnit: unit } : u));
+    await authUpdateWeightUnit(getLocalSession()!.id, unit);
+  };
+
   return (
     <AuthContext.Provider
-      value={{ user, loading, signIn: handleSignIn, signUp: handleSignUp, signOut: handleSignOut }}
+      value={{
+        user,
+        loading,
+        signIn: handleSignIn,
+        signUp: handleSignUp,
+        signOut: handleSignOut,
+        setWeightUnit: handleSetWeightUnit,
+      }}
     >
       {children}
     </AuthContext.Provider>
