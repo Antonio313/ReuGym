@@ -3,6 +3,8 @@ import ReactMarkdown from 'react-markdown';
 import { PaperPlaneTilt, X, Check } from '@phosphor-icons/react';
 import { Drawer, DrawerContent } from '@/components/ui/drawer';
 import { useExercises, useStretches } from '@/hooks/useExercises';
+import { useActiveLoadoutMap, useLoadoutNameOverrides } from '@/hooks/useLoadouts';
+import { DAY_CATEGORIES, defaultLoadoutId, templateMap as defaultTemplateMap } from '@/data/templates';
 import { getLocalSession } from '@/lib/auth';
 import { supabase } from '@/lib/supabase';
 
@@ -38,12 +40,6 @@ const LOADING_STATUSES = [
   'Planning your workout…',
   'Finalising plan…',
 ];
-
-const TEMPLATE_IDS = ['push', 'pull', 'legs', 'core', 'glutes', 'back'] as const;
-const TEMPLATE_NAMES: Record<string, string> = {
-  push: 'Push Day', pull: 'Pull Day', legs: 'Leg Day',
-  core: 'Core Day', glutes: 'Glute Day', back: 'Back Day',
-};
 
 // ─── Typewriter ───────────────────────────────────────────────────
 
@@ -188,6 +184,11 @@ export function AIChatDrawer({ open, onClose, onActionsApplied }: Props) {
   const inputRef   = useRef<HTMLInputElement>(null);
   const allExercises = useExercises();
   const allStretches = useStretches();
+  // category -> currently-active loadout templateId, so the assistant reads
+  // and edits whichever loadout is actually in effect (e.g. "Home — No
+  // Equipment") instead of always the base gym day, even while it's active.
+  const activeLoadoutMap = useActiveLoadoutMap();
+  const loadoutNameOverrides = useLoadoutNameOverrides();
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -286,15 +287,21 @@ export function AIChatDrawer({ open, onClose, onActionsApplied }: Props) {
       }));
       const stretchLibrary = allStretches.map(s => ({ id: s.id, name: s.name, category: s.category }));
 
+      // Whichever loadout is active per day right now — a category with no
+      // switch yet just falls back to its Loadout 1 (the bare category id).
+      const activeTemplateIds = DAY_CATEGORIES.map((cat) => activeLoadoutMap[cat] ?? defaultLoadoutId(cat));
+      const templateDisplayName = (tid: string) =>
+        loadoutNameOverrides.get(tid) ?? defaultTemplateMap.get(tid)?.name ?? tid;
+
       const templateMap: Record<string, { id: string; name: string; exercises: Array<{ exerciseId: string; sets: number; repRangeMin: number; repRangeMax: number }> }> = {};
-      for (const tid of TEMPLATE_IDS) templateMap[tid] = { id: tid, name: TEMPLATE_NAMES[tid], exercises: [] };
+      for (const tid of activeTemplateIds) templateMap[tid] = { id: tid, name: templateDisplayName(tid), exercises: [] };
       for (const row of templateExRows ?? []) {
         const t = templateMap[row.template_id as string];
         if (t) t.exercises.push({ exerciseId: row.exercise_id as string, sets: row.sets as number, repRangeMin: row.rep_range_min as number, repRangeMax: row.rep_range_max as number });
       }
 
       const stretchMap: Record<string, { templateId: string; pre: Array<{ exerciseId: string; restSeconds: number }>; post: Array<{ exerciseId: string; restSeconds: number }> }> = {};
-      for (const tid of TEMPLATE_IDS) stretchMap[tid] = { templateId: tid, pre: [], post: [] };
+      for (const tid of activeTemplateIds) stretchMap[tid] = { templateId: tid, pre: [], post: [] };
       for (const row of templateStretchRows ?? []) {
         const t = stretchMap[row.template_id as string];
         if (t) {

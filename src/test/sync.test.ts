@@ -109,7 +109,7 @@ const NOW = Date.now(); // must be recent so deltaSync's 7-day window includes t
 describe('initialSync', () => {
   beforeEach(() => mockUtils.reset());
 
-  it('populates all 7 Dexie tables from Supabase', async () => {
+  it('populates all 9 Dexie tables from Supabase', async () => {
     const { userId, db } = makeUser();
 
     mockUtils.seed('workout_sessions', [
@@ -134,6 +134,12 @@ describe('initialSync', () => {
     mockUtils.seed('custom_exercises', [
       { id: 'ce-1', user_id: userId, name: 'My Exercise', category: 'push', type: 'accessory', muscles: ['chest'], is_bodyweight: false, is_cable: false, is_timed: false, is_stretch: false },
     ]);
+    mockUtils.seed('loadout_names', [
+      { user_id: userId, template_id: 'push-l2', name: 'Home — No Equipment' },
+    ]);
+    mockUtils.seed('active_loadouts', [
+      { user_id: userId, category: 'push', template_id: 'push-l2' },
+    ]);
 
     await initialSync(userId);
 
@@ -145,6 +151,8 @@ describe('initialSync', () => {
     expect(await db.templateExercises.count()).toBe(1);
     expect(await db.templateStretches.count()).toBe(1);
     expect(await db.customExercises.count()).toBe(1);
+    expect(await db.loadoutNames.count()).toBe(1);
+    expect(await db.activeLoadouts.count()).toBe(1);
   });
 
   it('converts snake_case Supabase rows to camelCase Dexie rows', async () => {
@@ -308,6 +316,21 @@ describe('pushQueue', () => {
 
     expect(await db.syncQueue.count()).toBe(0);
     expect(mockUtils.getRows('custom_exercises')).toHaveLength(0);
+  });
+
+  it('upserts active_loadouts by (user_id, category) — a re-switch overwrites, never duplicates', async () => {
+    const { userId, db } = makeUser();
+
+    await enqueueSync(userId, 'active_loadouts', 'upsert', { user_id: userId, category: 'push', template_id: 'push-l2' });
+    await pushQueue(userId);
+    await enqueueSync(userId, 'active_loadouts', 'upsert', { user_id: userId, category: 'push', template_id: 'push-l3' });
+    await pushQueue(userId);
+
+    const rows = mockUtils.getRows('active_loadouts');
+    expect(rows).toHaveLength(1);
+    expect(rows[0].template_id).toBe('push-l3');
+
+    expect(await db.syncQueue.count()).toBe(0);
   });
 
   it('increments attempts and stores error when Supabase fails', async () => {

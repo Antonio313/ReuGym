@@ -1,3 +1,4 @@
+import type { Table } from 'dexie';
 import { nanoid } from 'nanoid';
 import { supabase } from '@/lib/supabase';
 import { getLocalSession } from '@/lib/session';
@@ -10,10 +11,56 @@ import {
   rowToTemplateExercise,
   rowToTemplateStretch,
   rowToCustomExercise,
+  rowToLoadoutName,
+  rowToActiveLoadout,
   type SupabaseTableName,
   type SyncOperation,
   type ReplaceAllPayload,
 } from '@/data/db';
+
+// A template's exercises/stretches are pulled as a full replacement set (see
+// "Config tables are small — full re-sync" below), but a plain bulkPut can
+// only add/update rows — it can never remove a local row that's absent from
+// the pulled set. If a local `replaceAll` write ever landed a new row set
+// locally without its matching push actually reaching Supabase (e.g. a
+// superseded queued op skipped by the version check in applyOperation), the
+// stale local rows had no way to ever get cleaned up: every later sync just
+// bulkPut the server's set alongside them, forever. This reconciles a table
+// down to exactly what the server returned, except for templateIds that
+// still have an unpushed local edit queued — those are left alone so an
+// in-flight edit never gets clobbered by a pull that raced it.
+async function reconcileTemplateTable<T extends { id: string; userId: string; templateId: string }>(
+  table: Table<T, string>,
+  userId: string,
+  pulledRows: T[],
+  protectedTemplateIds: Set<string>,
+): Promise<void> {
+  const pulledIds = new Set(pulledRows.map((r) => r.id));
+  const existing = await table.where('userId').equals(userId).toArray();
+  const staleIds = existing
+    .filter((r) => !pulledIds.has(r.id) && !protectedTemplateIds.has(r.templateId))
+    .map((r) => r.id);
+
+  await table.db.transaction('rw', table, async () => {
+    if (staleIds.length > 0) await table.bulkDelete(staleIds);
+    await table.bulkPut(pulledRows);
+  });
+}
+
+// templateIds with a queued-but-unpushed replaceAll for the given table —
+// reconcileTemplateTable must not prune rows out from under those.
+async function protectedTemplateIdsFor(
+  db: ReturnType<typeof getDB>,
+  userId: string,
+  table: 'template_exercises' | 'template_stretches',
+): Promise<Set<string>> {
+  const queued = await db.syncQueue.where('userId').equals(userId).toArray();
+  return new Set(
+    queued
+      .filter((op) => op.table === table && op.operation === 'replaceAll')
+      .map((op) => (op.payload as ReplaceAllPayload).templateId),
+  );
+}
 
 // ─── Public API ───────────────────────────────────────────────────
 
@@ -22,7 +69,7 @@ import {
 export async function initialSync(userId: string): Promise<void> {
   const db = getDB(userId);
 
-  const [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises] =
+  const [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts] =
     await Promise.all([
       supabase.from('workout_sessions').select('*').eq('user_id', userId),
       supabase.from('logged_sets').select('*').eq('user_id', userId),
@@ -31,24 +78,43 @@ export async function initialSync(userId: string): Promise<void> {
       supabase.from('template_exercises').select('*').eq('user_id', userId),
       supabase.from('template_stretches').select('*').eq('user_id', userId),
       supabase.from('custom_exercises').select('*').eq('user_id', userId),
+      supabase.from('loadout_names').select('*').eq('user_id', userId),
+      supabase.from('active_loadouts').select('*').eq('user_id', userId),
     ]);
 
   // Surface any Supabase errors so SyncGate can show retry UI
-  const errors = [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises]
+  const errors = [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts]
     .map((r) => r.error)
     .filter(Boolean);
   if (errors.length > 0) {
     throw new Error(errors[0]!.message);
   }
 
+  const [protectedExerciseIds, protectedStretchIds] = await Promise.all([
+    protectedTemplateIdsFor(db, userId, 'template_exercises'),
+    protectedTemplateIdsFor(db, userId, 'template_stretches'),
+  ]);
+
   await Promise.all([
     db.sessions.bulkPut((sessions.data ?? []).map((r) => rowToSession(r, userId))),
     db.sets.bulkPut((sets.data ?? []).map((r) => rowToSet(r, userId))),
     db.bodyStats.bulkPut((bodyStats.data ?? []).map((r) => rowToBodyStat(r, userId))),
     db.exercisePrefs.bulkPut((exercisePrefs.data ?? []).map((r) => rowToExercisePref(r, userId))),
-    db.templateExercises.bulkPut((templateExercises.data ?? []).map((r) => rowToTemplateExercise(r, userId))),
-    db.templateStretches.bulkPut((templateStretches.data ?? []).map((r) => rowToTemplateStretch(r, userId))),
+    reconcileTemplateTable(
+      db.templateExercises,
+      userId,
+      (templateExercises.data ?? []).map((r) => rowToTemplateExercise(r, userId)),
+      protectedExerciseIds,
+    ),
+    reconcileTemplateTable(
+      db.templateStretches,
+      userId,
+      (templateStretches.data ?? []).map((r) => rowToTemplateStretch(r, userId)),
+      protectedStretchIds,
+    ),
     db.customExercises.bulkPut((customExercises.data ?? []).map((r) => rowToCustomExercise(r, userId))),
+    db.loadoutNames.bulkPut((loadoutNames.data ?? []).map((r) => rowToLoadoutName(r, userId))),
+    db.activeLoadouts.bulkPut((activeLoadouts.data ?? []).map((r) => rowToActiveLoadout(r, userId))),
   ]);
 
   await db.syncMeta.put({ userId, initialSyncComplete: true, lastSyncedAt: Date.now() });
@@ -69,11 +135,18 @@ export async function deltaSync(userId: string): Promise<number> {
     ]);
 
     // Config tables are small — full re-sync is simpler and more reliable
-    const [exercisePrefs, templateExercises, templateStretches, customExercises] = await Promise.all([
+    const [exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts] = await Promise.all([
       supabase.from('exercise_prefs').select('*').eq('user_id', userId),
       supabase.from('template_exercises').select('*').eq('user_id', userId),
       supabase.from('template_stretches').select('*').eq('user_id', userId),
       supabase.from('custom_exercises').select('*').eq('user_id', userId),
+      supabase.from('loadout_names').select('*').eq('user_id', userId),
+      supabase.from('active_loadouts').select('*').eq('user_id', userId),
+    ]);
+
+    const [protectedExerciseIds, protectedStretchIds] = await Promise.all([
+      protectedTemplateIdsFor(db, userId, 'template_exercises'),
+      protectedTemplateIdsFor(db, userId, 'template_stretches'),
     ]);
 
     const writes = await Promise.allSettled([
@@ -81,9 +154,21 @@ export async function deltaSync(userId: string): Promise<number> {
       db.sets.bulkPut((sets.data ?? []).map((r) => rowToSet(r, userId))),
       db.bodyStats.bulkPut((bodyStats.data ?? []).map((r) => rowToBodyStat(r, userId))),
       db.exercisePrefs.bulkPut((exercisePrefs.data ?? []).map((r) => rowToExercisePref(r, userId))),
-      db.templateExercises.bulkPut((templateExercises.data ?? []).map((r) => rowToTemplateExercise(r, userId))),
-      db.templateStretches.bulkPut((templateStretches.data ?? []).map((r) => rowToTemplateStretch(r, userId))),
+      reconcileTemplateTable(
+        db.templateExercises,
+        userId,
+        (templateExercises.data ?? []).map((r) => rowToTemplateExercise(r, userId)),
+        protectedExerciseIds,
+      ),
+      reconcileTemplateTable(
+        db.templateStretches,
+        userId,
+        (templateStretches.data ?? []).map((r) => rowToTemplateStretch(r, userId)),
+        protectedStretchIds,
+      ),
       db.customExercises.bulkPut((customExercises.data ?? []).map((r) => rowToCustomExercise(r, userId))),
+      db.loadoutNames.bulkPut((loadoutNames.data ?? []).map((r) => rowToLoadoutName(r, userId))),
+      db.activeLoadouts.bulkPut((activeLoadouts.data ?? []).map((r) => rowToActiveLoadout(r, userId))),
     ]);
 
     rowsUpdated =
@@ -93,7 +178,9 @@ export async function deltaSync(userId: string): Promise<number> {
       (exercisePrefs.data?.length ?? 0) +
       (templateExercises.data?.length ?? 0) +
       (templateStretches.data?.length ?? 0) +
-      (customExercises.data?.length ?? 0);
+      (customExercises.data?.length ?? 0) +
+      (loadoutNames.data?.length ?? 0) +
+      (activeLoadouts.data?.length ?? 0);
 
     // Log any Dexie write failures without crashing
     writes.forEach((r) => { if (r.status === 'rejected') console.warn('deltaSync write failed:', r.reason); });
@@ -205,6 +292,8 @@ export async function enqueueSync(
 const COMPOSITE_KEY_TABLES: Partial<Record<SupabaseTableName, string>> = {
   exercise_prefs:   'user_id,exercise_id',
   custom_exercises: 'id,user_id',
+  loadout_names:    'user_id,template_id',
+  active_loadouts:  'user_id,category',
 };
 
 async function applyOperation(op: SyncOperation, userId: string): Promise<void> {

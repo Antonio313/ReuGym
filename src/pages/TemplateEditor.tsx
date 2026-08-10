@@ -11,6 +11,7 @@ import { StretchPickerDrawer } from '@/components/workout/StretchPickerDrawer';
 import { useTemplate, saveTemplate } from '@/hooks/useTemplates';
 import { useExercises, useStretches } from '@/hooks/useExercises';
 import { useDayStretches, saveDayStretches } from '@/hooks/useDayStretches';
+import { useDayLoadouts, renameLoadout, setActiveLoadout } from '@/hooks/useLoadouts';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import { useUnit } from '@/hooks/useUnit';
 import type { TemplateExercise, WorkoutTemplate, DayStretch, Exercise, SubstituteConfig } from '@/types';
@@ -902,6 +903,9 @@ export default function TemplateEditor() {
   }, [stretches]);
 
   const baseTemplate = liveTemplate ?? (id ? defaultTemplateMap.get(id) : undefined);
+  const loadouts = useDayLoadouts(baseTemplate?.category ?? '');
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState('');
 
   if (!baseTemplate) {
     return (
@@ -912,6 +916,27 @@ export default function TemplateEditor() {
       </div>
     );
   }
+
+  // ── Loadout switcher ─────────────────────────────────────────────
+  // Switching tabs is a single combined action: it's both what you're now
+  // editing and immediately becomes what Start on Home runs next.
+  const handleLoadoutSwitch = (targetId: string) => {
+    if (targetId === baseTemplate.id) return;
+    void setActiveLoadout(baseTemplate.category, targetId);
+    navigate(`/template/${targetId}/edit`, { replace: true });
+  };
+
+  const startRename = (templateId: string, currentName: string) => {
+    setRenamingId(templateId);
+    setRenameValue(currentName);
+  };
+
+  const commitRename = () => {
+    if (renamingId && renameValue.trim()) {
+      void renameLoadout(renamingId, renameValue.trim());
+    }
+    setRenamingId(null);
+  };
 
   // ── Exercise mutations ──────────────────────────────────────────
 
@@ -1045,6 +1070,69 @@ export default function TemplateEditor() {
           {localExercises.length} exercises
         </span>
       </header>
+
+      {/* Loadout switcher — one combined "editing this" + "active for Start" control */}
+      <div className="flex items-center gap-2 px-4 py-2 overflow-x-auto"
+        style={{ borderBottom: 'var(--border-thin)' }}>
+        {loadouts.map((loadout) => {
+          const isCurrent = loadout.templateId === baseTemplate.id;
+          const isRenaming = renamingId === loadout.templateId;
+          return (
+            <div key={loadout.templateId} className="flex items-center gap-1 flex-shrink-0">
+              {isRenaming ? (
+                <input
+                  autoFocus
+                  value={renameValue}
+                  onChange={(e) => setRenameValue(e.target.value)}
+                  onBlur={commitRename}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') commitRename();
+                    if (e.key === 'Escape') setRenamingId(null);
+                  }}
+                  className="font-body px-3 py-1.5"
+                  style={{
+                    fontSize: 'var(--text-meta)',
+                    background: 'var(--color-surface-2)',
+                    color: 'var(--color-text)',
+                    border: '1px solid var(--color-accent)',
+                    borderRadius: 'var(--radius-sm)',
+                    width: '9rem',
+                  }}
+                />
+              ) : (
+                <button
+                  onClick={() => handleLoadoutSwitch(loadout.templateId)}
+                  className="flex items-center gap-1.5 font-body px-3 py-1.5 whitespace-nowrap"
+                  style={{
+                    fontSize: 'var(--text-meta)',
+                    borderRadius: 'var(--radius-sm)',
+                    border: isCurrent ? '1px solid var(--color-accent)' : 'var(--border-thin)',
+                    background: isCurrent ? 'var(--color-accent-dim)' : 'var(--color-surface)',
+                    color: isCurrent ? 'var(--color-accent)' : 'var(--color-text-muted)',
+                  }}
+                >
+                  {loadout.isActive && (
+                    <span
+                      aria-label="Active"
+                      style={{ width: '5px', height: '5px', borderRadius: '50%', background: 'var(--color-success)', flexShrink: 0 }}
+                    />
+                  )}
+                  {loadout.name}
+                </button>
+              )}
+              {isCurrent && !isRenaming && (
+                <button
+                  onClick={() => startRename(loadout.templateId, loadout.name)}
+                  aria-label="Rename loadout"
+                  style={{ color: 'var(--color-text-faint)' }}
+                >
+                  <PencilSimple size={13} />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
 
       <div className="flex-1 px-4 py-3">
 

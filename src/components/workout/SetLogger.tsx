@@ -59,6 +59,22 @@ export function SetLogger({
   const [timerDisplaySeconds, setTimerDisplaySeconds] = useState(0);
   const [timerLocked, setTimerLocked] = useState<number | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Anchored to Date.now() rather than incremented per-tick, so a throttled
+  // or suspended interval while backgrounded (screen lock, app switch)
+  // self-corrects to the true elapsed time instead of undercounting.
+  const timerStartRef = useRef<number | null>(null);
+  const timerVisibilityHandlerRef = useRef<(() => void) | null>(null);
+
+  const clearTimerLoop = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+    if (timerVisibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', timerVisibilityHandlerRef.current);
+      timerVisibilityHandlerRef.current = null;
+    }
+  };
 
   const lastData = useLastSetData(exercise.id, setNumber, sessionId, side);
   const exercisePref = useExercisePref(exercise.id);
@@ -73,11 +89,13 @@ export function SetLogger({
     setTimerRunning(false);
     setTimerDisplaySeconds(0);
     setTimerLocked(null);
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
+    timerStartRef.current = null;
+    clearTimerLoop();
   }, [exercise.id, setNumber, side]);
+
+  // Guard against a leaked visibilitychange listener if the component
+  // unmounts (e.g. workout abandoned) while a timed set is running.
+  useEffect(() => clearTimerLoop, []);
 
   // Default weight: lastData → resolveStartingWeight(template, pref)
   const defaultWeightKg = lastData?.weightKg != null
@@ -100,25 +118,35 @@ export function SetLogger({
     if (timerRunning) return;
     setTimerRunning(true);
     setTimerLocked(null);
-    timerIntervalRef.current = setInterval(() => {
-      setTimerDisplaySeconds(prev => prev + 1);
-    }, 1000);
+    timerStartRef.current = Date.now();
+    const sync = () => {
+      if (timerStartRef.current !== null) {
+        setTimerDisplaySeconds(Math.floor((Date.now() - timerStartRef.current) / 1000));
+      }
+    };
+    timerIntervalRef.current = setInterval(sync, 1000);
+    timerVisibilityHandlerRef.current = sync;
+    document.addEventListener('visibilitychange', sync);
   };
 
   const stopTimer = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
+    // Resync once more before locking in case the tab was backgrounded and
+    // the last interval tick was skipped or throttled.
+    if (timerStartRef.current !== null) {
+      setTimerDisplaySeconds(Math.floor((Date.now() - timerStartRef.current) / 1000));
     }
+    clearTimerLoop();
     setTimerRunning(false);
-    setTimerLocked(timerDisplaySeconds);
+    setTimerLocked(
+      timerStartRef.current !== null
+        ? Math.floor((Date.now() - timerStartRef.current) / 1000)
+        : timerDisplaySeconds,
+    );
   };
 
   const resetTimer = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
+    clearTimerLoop();
+    timerStartRef.current = null;
     setTimerRunning(false);
     setTimerDisplaySeconds(0);
     setTimerLocked(null);

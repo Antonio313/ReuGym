@@ -54,12 +54,24 @@ export type TemplateExercise = {
   substitutes?: SubstituteConfig[];
 };
 
+export type LoadoutSlot = 1 | 2 | 3;
+
 export type WorkoutTemplate = {
   id: string;
   name: string;
   category: ExerciseCategory;
   shortLabel: string;
+  loadoutSlot: LoadoutSlot;
   exercises: TemplateExercise[];
+};
+
+// Combined shape for rendering a day's loadout switcher (TemplateEditor).
+export type LoadoutInfo = {
+  templateId: string;
+  slot: LoadoutSlot;
+  name: string;
+  shortLabel: string;
+  isActive: boolean;
 };
 
 // ─── Stretch assignment (references an Exercise with isStretch:true) ─

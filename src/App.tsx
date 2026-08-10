@@ -6,6 +6,7 @@ import { OnboardingModal } from '@/components/onboarding/OnboardingModal';
 import Home from '@/pages/Home';
 import WorkoutActive from '@/pages/WorkoutActive';
 import WorkoutHistory from '@/pages/WorkoutHistory';
+import SessionDetail from '@/pages/SessionDetail';
 import ExerciseDetail from '@/pages/ExerciseDetail';
 import ExerciseLibrary from '@/pages/ExerciseLibrary';
 import BodyStats from '@/pages/BodyStats';
@@ -61,6 +62,7 @@ function AppRoutes() {
         <Route path="/"                          element={<Home />} />
         <Route path="/workout/:templateId"       element={<WorkoutActive />} />
         <Route path="/history"                   element={<WorkoutHistory />} />
+        <Route path="/session/:sessionId"        element={<SessionDetail />} />
         <Route path="/exercises"                 element={<ExerciseLibrary />} />
         <Route path="/exercise/:exerciseId"      element={<ExerciseDetail />} />
         <Route path="/stats"                     element={<BodyStats />} />

@@ -5,12 +5,12 @@ import { PencilSimple, ChatCircle } from '@phosphor-icons/react';
 import { Header } from '@/components/layout/Header';
 import { PageShell } from '@/components/layout/PageShell';
 import { AIChatDrawer } from '@/components/workout/AIChatDrawer';
-import { useTemplates, useTemplate } from '@/hooks/useTemplates';
+import { useTemplate } from '@/hooks/useTemplates';
+import { useActiveLoadoutId, useLoadoutName } from '@/hooks/useLoadouts';
+import { templateMap as defaultTemplateMap, DAY_CATEGORIES } from '@/data/templates';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
-import type { WorkoutTemplate } from '@/types';
-
-const DAY_LABEL_ORDER = ['push', 'pull', 'legs', 'core', 'glutes', 'back'] as const;
+import type { ExerciseCategory } from '@/types';
 
 function formatDate(timestamp: number): string {
   return new Intl.DateTimeFormat('en-US', {
@@ -29,20 +29,28 @@ function formatToday(): string {
 }
 
 type DayCardProps = {
-  template: WorkoutTemplate;
-  lastSessionDate?: number;
+  category: ExerciseCategory;
+  lastSessions: Record<string, number>;
   variants: Variants;
 };
 
-function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
+function DayCard({ category, lastSessions, variants }: DayCardProps) {
   const navigate = useNavigate();
   const reduceMotion = useReducedMotion();
-  const [liveTemplate] = useTemplate(template.id);
+  const activeId = useActiveLoadoutId(category);
+  const meta = defaultTemplateMap.get(activeId);
+  const loadoutName = useLoadoutName(activeId);
+  const [liveTemplate] = useTemplate(activeId);
   // Falls back to the static count only while the live query is still
   // loading (undefined) — once it resolves, it's the source of truth,
   // including a genuine 0 if the user has emptied this day.
-  const exerciseCount = liveTemplate?.exercises.length ?? template.exercises.length;
+  const exerciseCount = liveTemplate?.exercises.length ?? meta?.exercises.length ?? 0;
   const [showEmptyWarning, setShowEmptyWarning] = useState(false);
+  const lastSessionDate = lastSessions[activeId];
+  // Loadout 1's id is always the bare category — anything else means the
+  // user has switched this day away from its default, which is worth
+  // surfacing clearly so Start never runs a loadout they don't expect.
+  const isNonDefaultLoadout = activeId !== category;
 
   const handleStart = () => {
     if (exerciseCount === 0) {
@@ -50,7 +58,7 @@ function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
       setTimeout(() => setShowEmptyWarning(false), 3000);
       return;
     }
-    navigate(`/workout/${template.id}`);
+    navigate(`/workout/${activeId}`);
   };
 
   return (
@@ -66,10 +74,10 @@ function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
     >
       {/* Edit icon */}
       <button
-        onClick={(e) => { e.stopPropagation(); navigate(`/template/${template.id}/edit`); }}
+        onClick={(e) => { e.stopPropagation(); navigate(`/template/${activeId}/edit`); }}
         className="absolute top-3 right-3"
         style={{ color: 'var(--color-text-faint)' }}
-        aria-label={`Edit ${template.name}`}
+        aria-label={`Edit ${meta?.name ?? category}`}
       >
         <PencilSimple size={16} />
       </button>
@@ -83,8 +91,18 @@ function DayCard({ template, lastSessionDate, variants }: DayCardProps) {
           letterSpacing: '-0.01em',
         }}
       >
-        {template.shortLabel}
+        {meta?.shortLabel ?? category.toUpperCase()}
       </span>
+
+      {/* Active loadout — only shown when it's not the day's default */}
+      {isNonDefaultLoadout && (
+        <span
+          className="font-body uppercase tracking-widest"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-accent)' }}
+        >
+          {loadoutName}
+        </span>
+      )}
 
       {/* Exercise count */}
       <span
@@ -144,7 +162,6 @@ export default function Home() {
     visible: { opacity: 1, y: 0, transition: { duration: 0.3, ease: [0, 0, 0.2, 1] } },
   };
 
-  const templates = useTemplates();
   const [aiOpen, setAiOpen] = useState(false);
   const [lastSessions, setLastSessions] = useState<Record<string, number>>({});
 
@@ -166,10 +183,6 @@ export default function Home() {
       });
   }, []);
 
-  const orderedTemplates = DAY_LABEL_ORDER
-    .map((cat) => templates.find((t) => t.category === cat))
-    .filter((t): t is WorkoutTemplate => t !== undefined);
-
   return (
     <PageShell>
       <Header subtitle={formatToday()} />
@@ -182,11 +195,11 @@ export default function Home() {
           initial="hidden"
           animate="visible"
         >
-          {orderedTemplates.map((template) => (
+          {DAY_CATEGORIES.map((category) => (
             <DayCard
-              key={template.id}
-              template={template}
-              lastSessionDate={lastSessions[template.id]}
+              key={category}
+              category={category}
+              lastSessions={lastSessions}
               variants={cardItem}
             />
           ))}

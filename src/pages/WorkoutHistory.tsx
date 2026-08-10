@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { ClockCounterClockwise, Trophy, Export, Upload, DeviceMobile } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { EmptyState } from '@/components/shared/EmptyState';
@@ -9,6 +9,7 @@ import { initialSync } from '@/lib/sync';
 import { exportData, importFromJson, migrateFromIndexedDB, type ImportResult } from '@/lib/dataTransfer';
 import { useExercises } from '@/hooks/useExercises';
 import { useTemplates } from '@/hooks/useTemplates';
+import { useLoadoutNameOverrides } from '@/hooks/useLoadouts';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
 import type { WorkoutSession } from '@/types';
 
@@ -46,29 +47,48 @@ function SessionCard({
   data,
   exerciseMap,
   templateLabel,
+  loadoutLabel,
 }: {
   data: EnrichedSession;
   exerciseMap: Map<string, string>;
   templateLabel: string;
+  loadoutLabel?: string;
 }) {
   const { session, workSetCount, prCount, exerciseIds } = data;
+  const navigate = useNavigate();
 
   const MAX_SHOWN = 3;
   const shownIds = exerciseIds.slice(0, MAX_SHOWN);
   const overflow = exerciseIds.length - MAX_SHOWN;
 
+  const goToSession = () => navigate(`/session/${session.id}`);
+
   return (
     <div
-      className="px-4 py-4"
+      className="px-4 py-4 cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onClick={goToSession}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); goToSession(); } }}
       style={{ borderBottom: 'var(--border-thin)' }}
     >
-      {/* Top row: day label + date */}
+      {/* Top row: day label (+ loadout, if not the default) + date */}
       <div className="flex items-baseline justify-between mb-2">
-        <span
-          className="font-display"
-          style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)', letterSpacing: '0.05em' }}
-        >
-          {templateLabel}
+        <span className="flex items-baseline gap-2">
+          <span
+            className="font-display"
+            style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)', letterSpacing: '0.05em' }}
+          >
+            {templateLabel}
+          </span>
+          {loadoutLabel && (
+            <span
+              className="font-body uppercase tracking-widest"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-accent)' }}
+            >
+              {loadoutLabel}
+            </span>
+          )}
         </span>
         <span
           className="font-body"
@@ -88,6 +108,7 @@ function SessionCard({
             {i > 0 && <span style={{ color: 'var(--color-text-faint)' }}> · </span>}
             <Link
               to={`/exercise/${id}`}
+              onClick={(e) => e.stopPropagation()}
               style={{ color: 'var(--color-text-muted)' }}
             >
               {exerciseMap.get(id) ?? id}
@@ -150,11 +171,20 @@ export default function WorkoutHistory() {
 
   const liveTemplates = useTemplates() ?? [];
   const liveTemplateMap = new Map(liveTemplates.map((t) => [t.id, t]));
+  const loadoutNameOverrides = useLoadoutNameOverrides();
 
   const getTemplateLabel = (templateId: string): string => {
     const live = liveTemplateMap.get(templateId);
     if (live) return live.shortLabel;
     return defaultTemplateMap.get(templateId)?.shortLabel ?? templateId.toUpperCase();
+  };
+
+  // Only surfaced for a non-default loadout — an unmodified day's sessions
+  // look exactly as they always have.
+  const getLoadoutLabel = (templateId: string): string | undefined => {
+    const meta = defaultTemplateMap.get(templateId);
+    if (!meta || meta.loadoutSlot === 1) return undefined;
+    return loadoutNameOverrides.get(templateId) ?? meta.name;
   };
 
   const [enrichedSessions, setEnrichedSessions] = useState<EnrichedSession[] | undefined>(undefined);
@@ -444,6 +474,7 @@ export default function WorkoutHistory() {
             data={data}
             exerciseMap={exerciseMap}
             templateLabel={getTemplateLabel(data.session.templateId)}
+            loadoutLabel={getLoadoutLabel(data.session.templateId)}
           />
         ))}
       </main>

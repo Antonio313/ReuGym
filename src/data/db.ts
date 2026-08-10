@@ -47,6 +47,22 @@ export type DexieExercisePref = {
   startingReps?: number;
 };
 
+// loadout_names has no id — compound PK [userId+templateId]. Only exists for
+// a loadout the user has renamed away from its static default.
+export type DexieLoadoutName = {
+  userId: string;
+  templateId: string;
+  name: string;
+};
+
+// active_loadouts has no id — compound PK [userId+category]. One row per
+// day/category once the user has ever switched away from Loadout 1.
+export type DexieActiveLoadout = {
+  userId: string;
+  category: string;
+  templateId: string;
+};
+
 export type DexieTemplateExercise = {
   id: string;
   userId: string;
@@ -111,6 +127,8 @@ export type SupabaseTableName =
   | 'template_exercises'
   | 'template_stretches'
   | 'custom_exercises'
+  | 'loadout_names'
+  | 'active_loadouts'
   | 'users';
 
 export type ReplaceAllPayload = {
@@ -157,6 +175,8 @@ class WorkoutDB extends Dexie {
   templateExercises!: Table<DexieTemplateExercise, string>;
   templateStretches!: Table<DexieTemplateStretch, string>;
   customExercises!: Table<DexieCustomExercise, string>;
+  loadoutNames!: Table<DexieLoadoutName, [string, string]>;
+  activeLoadouts!: Table<DexieActiveLoadout, [string, string]>;
   syncQueue!: Table<SyncOperation, string>;
   syncMeta!: Table<SyncMeta, string>;
   templateVersions!: Table<TemplateVersion, string>;
@@ -174,6 +194,10 @@ class WorkoutDB extends Dexie {
       syncQueue:         'id, userId, createdAt',
       syncMeta:          'userId',
       templateVersions:  'key',
+    });
+    this.version(2).stores({
+      loadoutNames:    '[userId+templateId]',
+      activeLoadouts:  '[userId+category]',
     });
   }
 }
@@ -241,6 +265,22 @@ export function rowToExercisePref(r: Row, userId: string): DexieExercisePref {
     exerciseId:       r.exercise_id as string,
     startingWeightKg: r.starting_weight_kg as number,
     startingReps:     r.starting_reps as number | undefined,
+  };
+}
+
+export function rowToLoadoutName(r: Row, userId: string): DexieLoadoutName {
+  return {
+    userId,
+    templateId: r.template_id as string,
+    name:       r.name as string,
+  };
+}
+
+export function rowToActiveLoadout(r: Row, userId: string): DexieActiveLoadout {
+  return {
+    userId,
+    category:   r.category as string,
+    templateId: r.template_id as string,
   };
 }
 

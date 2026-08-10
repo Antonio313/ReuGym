@@ -3,6 +3,8 @@ import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { saveExercisePref } from '@/hooks/useExercisePref';
 import { useUnit } from '@/hooks/useUnit';
+import { toStorageWeight } from '@/lib/units';
+import type { WeightUnit } from '@/lib/auth';
 import type { Exercise, ExercisePref } from '@/types';
 
 type FeelingLevel = 'easy' | 'medium-easy' | 'fair' | 'fairly-difficult' | 'difficult';
@@ -24,13 +26,25 @@ const FEELING_STEPS: Record<FeelingLevel, number> = {
   'difficult':        -2,
 };
 
-function getWeightIncrement(exercise: Exercise): number {
+// Step sizes are defined as clean, round numbers in the user's display unit
+// (5/2.5 kg, 10/5 lbs) rather than converting a fixed kg value, so lbs users
+// get tidy increments instead of odd converted fractions.
+function getWeightIncrement(exercise: Exercise, unit: WeightUnit): number {
   if (exercise.type === 'plyo' || exercise.type === 'isometric' || exercise.isBodyweight) return 0;
-  return exercise.type === 'compound' ? 5 : 2.5;
+  const isCompound = exercise.type === 'compound';
+  const displayStep = unit === 'lbs' ? (isCompound ? 10 : 5) : (isCompound ? 5 : 2.5);
+  return toStorageWeight(displayStep, unit);
 }
 
-// Reps per feeling step: 2 for bodyweight, 1 for weighted
-function getRepStepSize(exercise: Exercise): number {
+// Reps per feeling step: 2 for bodyweight, 1 for weighted. Timed holds
+// (seconds, e.g. plank) scale the step to the current duration instead of a
+// flat count — a fixed +/-2s is negligible on a 60s hold and barely
+// perceptible on a 15s one. ~20% of the current hold, rounded to a clean 5s
+// increment with a 5s floor, so short holds still move meaningfully.
+function getRepStepSize(exercise: Exercise, currentSeconds: number): number {
+  if (exercise.isTimed) {
+    return Math.max(5, Math.round((currentSeconds * 0.2) / 5) * 5);
+  }
   return exercise.isBodyweight || exercise.type === 'plyo' || exercise.type === 'isometric' ? 2 : 1;
 }
 
@@ -63,8 +77,8 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
       });
   }, [sessionId, exercise.id]);
 
-  const weightInc  = getWeightIncrement(exercise);
-  const repStep    = getRepStepSize(exercise);
+  const weightInc  = getWeightIncrement(exercise, unit);
+  const repStep    = getRepStepSize(exercise, currentStartingReps);
   const isWeighted = weightInc > 0;
 
   const isEasySelection  = selected === 'easy' || selected === 'medium-easy';
@@ -175,20 +189,20 @@ export function FeelingMeter({ exercise, currentStartingWeightKg, currentStartin
             </div>
           )}
 
-          {/* Reps row — all exercises */}
+          {/* Reps/hold row — all exercises */}
           <div className="flex items-baseline gap-2">
             <span className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)', minWidth: '3.5rem' }}>
-              Reps
+              {exercise.isTimed ? 'Hold' : 'Reps'}
             </span>
             <span
               className="font-mono"
               data-numeric
               style={{ fontSize: 'var(--text-h3)', color: isWeighted ? 'var(--color-text)' : 'var(--color-accent)' }}
             >
-              {suggestedReps} reps
+              {exercise.isTimed ? `${suggestedReps}s` : `${suggestedReps} reps`}
             </span>
             <span style={{ color: 'var(--color-text-muted)', fontSize: 'var(--text-meta)' }}>
-              ({finalRepDelta >= 0 ? '+' : ''}{finalRepDelta})
+              ({finalRepDelta >= 0 ? '+' : ''}{finalRepDelta}{exercise.isTimed ? 's' : ''})
             </span>
           </div>
 

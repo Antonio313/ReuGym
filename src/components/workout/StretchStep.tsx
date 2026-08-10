@@ -42,6 +42,29 @@ export function StretchStep({
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const isInterSetRestRef = useRef(false);
+  // Anchored to an absolute end timestamp (like the workout rest timer) so a
+  // throttled/suspended interval while backgrounded resyncs to the true
+  // remaining time instead of drifting or stalling.
+  const restEndRef = useRef<number | null>(null);
+  const restVisibilityHandlerRef = useRef<(() => void) | null>(null);
+  const timerEndRef = useRef<number | null>(null);
+  const timerVisibilityHandlerRef = useRef<(() => void) | null>(null);
+
+  const clearRestLoop = () => {
+    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    if (restVisibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', restVisibilityHandlerRef.current);
+      restVisibilityHandlerRef.current = null;
+    }
+  };
+
+  const clearStretchTimerLoop = () => {
+    if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; }
+    if (timerVisibilityHandlerRef.current) {
+      document.removeEventListener('visibilitychange', timerVisibilityHandlerRef.current);
+      timerVisibilityHandlerRef.current = null;
+    }
+  };
 
   const isLast = index === total - 1;
 
@@ -54,9 +77,14 @@ export function StretchStep({
     setTimerSeconds(timerDuration ?? 0);
     setTimerRunning(false);
     isInterSetRestRef.current = false;
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
-    if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; }
+    restEndRef.current = null;
+    timerEndRef.current = null;
+    clearRestLoop();
+    clearStretchTimerLoop();
   }, [stretch.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Guard against leaked visibilitychange listeners on unmount
+  useEffect(() => () => { clearRestLoop(); clearStretchTimerLoop(); }, []);
 
   // Rest timer completion
   useEffect(() => {
@@ -82,16 +110,21 @@ export function StretchStep({
   const startStretchTimer = () => {
     if (timerRunning) return;
     setTimerRunning(true);
-    timerIntervalRef.current = setInterval(() => {
-      setTimerSeconds(prev => {
-        if (prev <= 1) { clearInterval(timerIntervalRef.current!); timerIntervalRef.current = null; return 0; }
-        return prev - 1;
-      });
-    }, 1000);
+    timerEndRef.current = Date.now() + timerSeconds * 1000;
+    const sync = () => {
+      if (timerEndRef.current === null) return;
+      const remaining = Math.max(0, Math.ceil((timerEndRef.current - Date.now()) / 1000));
+      setTimerSeconds(remaining);
+      if (remaining === 0) clearStretchTimerLoop();
+    };
+    timerIntervalRef.current = setInterval(sync, 1000);
+    timerVisibilityHandlerRef.current = sync;
+    document.addEventListener('visibilitychange', sync);
   };
 
   const resetStretchTimer = () => {
-    if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; }
+    clearStretchTimerLoop();
+    timerEndRef.current = null;
     setTimerRunning(false);
     setTimerSeconds(timerDuration ?? 0);
   };
@@ -99,16 +132,21 @@ export function StretchStep({
   const startRestCountdown = (secs: number) => {
     setIsResting(true);
     setSecondsLeft(secs);
-    intervalRef.current = setInterval(() => {
-      setSecondsLeft(prev => {
-        if (prev <= 1) { clearInterval(intervalRef.current!); intervalRef.current = null; return 0; }
-        return prev - 1;
-      });
-    }, 1000);
+    restEndRef.current = Date.now() + secs * 1000;
+    const sync = () => {
+      if (restEndRef.current === null) return;
+      const remaining = Math.max(0, Math.ceil((restEndRef.current - Date.now()) / 1000));
+      setSecondsLeft(remaining);
+      if (remaining === 0) clearRestLoop();
+    };
+    intervalRef.current = setInterval(sync, 1000);
+    restVisibilityHandlerRef.current = sync;
+    document.addEventListener('visibilitychange', sync);
   };
 
   const handleDone = () => {
-    if (timerIntervalRef.current) { clearInterval(timerIntervalRef.current); timerIntervalRef.current = null; }
+    clearStretchTimerLoop();
+    timerEndRef.current = null;
     setTimerRunning(false);
 
     // Per-side: do the other side immediately, no rest, same set number —
@@ -140,7 +178,8 @@ export function StretchStep({
   };
 
   const handleSkipRest = () => {
-    if (intervalRef.current) { clearInterval(intervalRef.current); intervalRef.current = null; }
+    clearRestLoop();
+    restEndRef.current = null;
     setIsResting(false);
     if (isInterSetRestRef.current) {
       isInterSetRestRef.current = false;
