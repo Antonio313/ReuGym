@@ -12,7 +12,6 @@ export default function SignUp() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [confirmEmailSent, setConfirmEmailSent] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -30,10 +29,10 @@ export default function SignUp() {
     try {
       const result = await signUp(email, password);
       if (result.status === 'confirm_email') {
-        setConfirmEmailSent(true);
-      } else {
-        navigate('/');
+        navigate('/check-email', { state: { email: email.trim() } });
+        return;
       }
+      navigate('/');
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
       setError(msg === 'ALREADY_EXISTS' ? 'ALREADY_EXISTS' : 'Something went wrong. Try again.');
@@ -55,122 +54,116 @@ export default function SignUp() {
           REUGYM
         </h1>
         <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-          {confirmEmailSent ? 'Almost there' : 'Create your account'}
+          Create your account
         </p>
       </div>
 
-      {confirmEmailSent ? (
-        <p className="font-body" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
-          Check your email for a confirmation link before signing in.
-        </p>
-      ) : (
-        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <div>
-            <p
-              className="font-body mb-1 uppercase tracking-widest"
-              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-            >
-              Email
-            </p>
-            <input
-              type="email"
-              inputMode="email"
-              autoComplete="email"
-              autoFocus
-              value={email}
-              onChange={(e) => { setEmail(e.target.value); setError(null); }}
-              placeholder="you@example.com"
-              className="w-full px-4 py-3 font-body"
-              style={{
-                background: 'var(--color-surface)',
-                border: 'var(--border-thin)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--color-text)',
-                fontSize: 'var(--text-body)',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          <div>
-            <p
-              className="font-body mb-1 uppercase tracking-widest"
-              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-            >
-              Password
-            </p>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => { setPassword(e.target.value); setError(null); }}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 font-body"
-              style={{
-                background: 'var(--color-surface)',
-                border: 'var(--border-thin)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--color-text)',
-                fontSize: 'var(--text-body)',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          <div>
-            <p
-              className="font-body mb-1 uppercase tracking-widest"
-              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
-            >
-              Confirm password
-            </p>
-            <input
-              type="password"
-              autoComplete="new-password"
-              value={confirmPassword}
-              onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
-              placeholder="••••••••"
-              className="w-full px-4 py-3 font-body"
-              style={{
-                background: 'var(--color-surface)',
-                border: 'var(--border-thin)',
-                borderRadius: 'var(--radius-md)',
-                color: 'var(--color-text)',
-                fontSize: 'var(--text-body)',
-                outline: 'none',
-              }}
-            />
-          </div>
-
-          {error === 'ALREADY_EXISTS' && (
-            <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-              Email already registered.{' '}
-              <Link to="/signin" style={{ color: 'var(--color-accent)' }}>Sign in →</Link>
-            </p>
-          )}
-          {error && error !== 'ALREADY_EXISTS' && (
-            <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}>
-              {error}
-            </p>
-          )}
-
-          <button
-            type="submit"
-            disabled={loading || !email.trim() || !password}
-            className="w-full py-4 font-display uppercase tracking-wide"
-            style={{
-              fontSize: 'var(--text-h2)',
-              background: loading || !email.trim() || !password ? 'var(--color-surface-2)' : 'var(--color-accent)',
-              color: loading || !email.trim() || !password ? 'var(--color-text-muted)' : '#fff',
-              borderRadius: 'var(--radius-md)',
-              border: 'none',
-              letterSpacing: '0.05em',
-            }}
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <div>
+          <p
+            className="font-body mb-1 uppercase tracking-widest"
+            style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
           >
-            {loading ? 'Creating account…' : 'Create Account'}
-          </button>
-        </form>
-      )}
+            Email
+          </p>
+          <input
+            type="email"
+            inputMode="email"
+            autoComplete="email"
+            autoFocus
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(null); }}
+            placeholder="you@example.com"
+            className="w-full px-4 py-3 font-body"
+            style={{
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+              fontSize: 'var(--text-body)',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div>
+          <p
+            className="font-body mb-1 uppercase tracking-widest"
+            style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+          >
+            Password
+          </p>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(null); }}
+            placeholder="••••••••"
+            className="w-full px-4 py-3 font-body"
+            style={{
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+              fontSize: 'var(--text-body)',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        <div>
+          <p
+            className="font-body mb-1 uppercase tracking-widest"
+            style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+          >
+            Confirm password
+          </p>
+          <input
+            type="password"
+            autoComplete="new-password"
+            value={confirmPassword}
+            onChange={(e) => { setConfirmPassword(e.target.value); setError(null); }}
+            placeholder="••••••••"
+            className="w-full px-4 py-3 font-body"
+            style={{
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+              fontSize: 'var(--text-body)',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {error === 'ALREADY_EXISTS' && (
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+            Email already registered.{' '}
+            <Link to="/signin" style={{ color: 'var(--color-accent)' }}>Sign in →</Link>
+          </p>
+        )}
+        {error && error !== 'ALREADY_EXISTS' && (
+          <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}>
+            {error}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={loading || !email.trim() || !password}
+          className="w-full py-4 font-display uppercase tracking-wide"
+          style={{
+            fontSize: 'var(--text-h2)',
+            background: loading || !email.trim() || !password ? 'var(--color-surface-2)' : 'var(--color-accent)',
+            color: loading || !email.trim() || !password ? 'var(--color-text-muted)' : '#fff',
+            borderRadius: 'var(--radius-md)',
+            border: 'none',
+            letterSpacing: '0.05em',
+          }}
+        >
+          {loading ? 'Creating account…' : 'Create Account'}
+        </button>
+      </form>
 
       <p className="font-body text-center" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
         Already have an account?{' '}

@@ -17,6 +17,7 @@ import SyncDebug from '@/pages/SyncDebug';
 import Settings from '@/pages/Settings';
 import SignIn from '@/pages/SignIn';
 import SignUp from '@/pages/SignUp';
+import CheckEmail from '@/pages/CheckEmail';
 import ForgotPassword from '@/pages/ForgotPassword';
 import SetPassword from '@/pages/SetPassword';
 import Setup from '@/pages/setup/Setup';
@@ -47,6 +48,7 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/check-email" element={<CheckEmail />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<SignIn />} />
       </Routes>

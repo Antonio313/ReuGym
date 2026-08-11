@@ -10,7 +10,8 @@ export type Location = 'gym' | 'home' | 'bodyweight';
 export type SetupForm = {
   goals: string;
   weightKg: number | null;
-  heightCm: number | null;
+  heightFeet: number | null;
+  heightInches: number | null;
   age: number | null;
   experience: Experience | null;
   bodyComp: BodyComp | null;
@@ -23,7 +24,8 @@ export type SetupForm = {
 export const EMPTY_FORM: SetupForm = {
   goals: '',
   weightKg: null,
-  heightCm: null,
+  heightFeet: null,
+  heightInches: null,
   age: null,
   experience: null,
   bodyComp: null,
@@ -81,7 +83,7 @@ export function buildSetupMessage(form: SetupForm, templateIds: string[]): strin
   lines.push('');
   lines.push(`Goals: ${form.goals.trim() || 'general fitness'}`);
   if (form.weightKg != null) lines.push(`Current weight: ${form.weightKg}kg`);
-  if (form.heightCm != null) lines.push(`Height: ${form.heightCm}cm`);
+  if (form.heightFeet != null) lines.push(`Height: ${form.heightFeet}'${form.heightInches ?? 0}"`);
   if (form.age != null) lines.push(`Age: ${form.age}`);
   if (form.experience) lines.push(`Training experience: ${EXPERIENCE_LABEL[form.experience]}`);
   if (form.bodyComp) lines.push(`Body composition: ${BODY_COMP_LABEL[form.bodyComp]}`);

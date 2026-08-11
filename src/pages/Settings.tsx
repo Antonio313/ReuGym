@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen, LockKey, SignOut, ArrowsClockwise } from '@phosphor-icons/react';
+import { ArrowLeft, BookOpen, LockKey, SignOut, ArrowsClockwise, ArrowCounterClockwise } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
 import { PasswordForm } from '@/components/auth/PasswordForm';
 import { useAuth } from '@/context/AuthContext';
@@ -15,7 +15,7 @@ const UNITS: { id: WeightUnit; label: string }[] = [
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { user, setWeightUnit, openOnboarding, completePasswordReset, signOut } = useAuth();
+  const { user, setWeightUnit, openOnboarding, completePasswordReset, signOut, resetSetup } = useAuth();
   const [saving, setSaving] = useState<WeightUnit | null>(null);
   const [showPasswordForm, setShowPasswordForm] = useState(false);
   const [passwordChanged, setPasswordChanged] = useState(false);
@@ -24,6 +24,8 @@ export default function Settings() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<number | null>(null);
   const [syncError, setSyncError] = useState<string | null>(null);
+  const [confirmResetSetup, setConfirmResetSetup] = useState(false);
+  const [resettingSetup, setResettingSetup] = useState(false);
 
   const handleSelect = async (unit: WeightUnit) => {
     if (!user || unit === user.weightUnit) return;
@@ -44,6 +46,17 @@ export default function Settings() {
   const handleSignOut = async () => {
     await signOut();
     navigate('/');
+  };
+
+  const handleResetSetup = async () => {
+    setResettingSetup(true);
+    try {
+      await resetSetup();
+      navigate('/');
+    } catch {
+      setResettingSetup(false);
+      setConfirmResetSetup(false);
+    }
   };
 
   const handleSync = async () => {
@@ -210,6 +223,54 @@ export default function Settings() {
           <BookOpen size={20} style={{ color: 'var(--color-text-muted)' }} />
           Replay welcome guide
         </button>
+
+        {!confirmResetSetup ? (
+          <button
+            type="button"
+            onClick={() => setConfirmResetSetup(true)}
+            className="flex items-center gap-3 w-full py-4 px-4 font-body mt-2"
+            style={{
+              fontSize: 'var(--text-body)',
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <ArrowCounterClockwise size={20} style={{ color: 'var(--color-text-muted)' }} />
+            Redo AI-assisted setup
+          </button>
+        ) : (
+          <div
+            className="flex flex-col gap-3 w-full py-4 px-4 mt-2"
+            style={{ background: 'var(--color-surface)', border: 'var(--border-thin)', borderRadius: 'var(--radius-md)' }}
+          >
+            <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}>
+              This walks you back through the AI setup wizard. Building a new program can replace your current
+              templates — your logged workout history isn't affected.
+            </p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => void handleResetSetup()}
+                disabled={resettingSetup}
+                className="flex-1 py-3 font-display uppercase tracking-wide"
+                style={{ fontSize: 'var(--text-meta)', background: 'var(--color-accent)', color: '#fff', borderRadius: 'var(--radius-md)', border: 'none' }}
+              >
+                {resettingSetup ? 'Starting…' : 'Yes, start over'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmResetSetup(false)}
+                disabled={resettingSetup}
+                className="flex-1 py-3 font-display uppercase tracking-wide"
+                style={{ fontSize: 'var(--text-meta)', background: 'var(--color-surface-2)', color: 'var(--color-text-muted)', borderRadius: 'var(--radius-md)', border: 'none' }}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
 
         {user?.isAdmin && (
           <>

@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 import { CaretLeft } from '@phosphor-icons/react';
 import { useAuth } from '@/context/AuthContext';
 import { useExercises, useStretches } from '@/hooks/useExercises';
+import { useUnit } from '@/hooks/useUnit';
 import { supabase } from '@/lib/supabase';
 import { ReviewScreen } from './ReviewScreen';
 import {
@@ -83,6 +84,7 @@ export default function Setup() {
   const { user, completeSetup } = useAuth();
   const exercises = useExercises();
   const stretches = useStretches();
+  const { unit, toDisplay, toKg } = useUnit();
 
   const [step, setStep] = useState(0);
   const [form, setForm] = useState<SetupForm>(EMPTY_FORM);
@@ -255,8 +257,39 @@ export default function Setup() {
             <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
               All optional — helps tailor volume and intensity.
             </p>
-            <NumberField label="Weight (kg)" value={form.weightKg} onChange={(v) => patch({ weightKg: v })} placeholder="e.g. 90" />
-            <NumberField label="Height (cm)" value={form.heightCm} onChange={(v) => patch({ heightCm: v })} placeholder="e.g. 180" />
+            <NumberField
+              label={`Weight (${unit})`}
+              value={form.weightKg != null ? toDisplay(form.weightKg) : null}
+              onChange={(v) => patch({ weightKg: v == null ? null : toKg(v) })}
+              placeholder={unit === 'lbs' ? 'e.g. 200' : 'e.g. 90'}
+            />
+            <div>
+              <Label>Height</Label>
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={form.heightFeet ?? ''}
+                    onChange={(e) => patch({ heightFeet: e.target.value === '' ? null : Number(e.target.value) })}
+                    placeholder="ft"
+                    className="w-full px-4 py-3 font-body"
+                    style={inputStyle}
+                  />
+                </div>
+                <div className="flex-1">
+                  <input
+                    type="number"
+                    inputMode="numeric"
+                    value={form.heightInches ?? ''}
+                    onChange={(e) => patch({ heightInches: e.target.value === '' ? null : Number(e.target.value) })}
+                    placeholder="in"
+                    className="w-full px-4 py-3 font-body"
+                    style={inputStyle}
+                  />
+                </div>
+              </div>
+            </div>
             <NumberField label="Age" value={form.age} onChange={(v) => patch({ age: v })} placeholder="e.g. 28" />
           </div>
         )}
@@ -305,7 +338,7 @@ export default function Setup() {
             <textarea
               value={form.currentLifts}
               onChange={(e) => patch({ currentLifts: e.target.value })}
-              placeholder="e.g. bench 60kg×8, squat 80kg×6"
+              placeholder={unit === 'lbs' ? 'e.g. bench 135lbs×8, squat 175lbs×6' : 'e.g. bench 60kg×8, squat 80kg×6'}
               rows={3}
               className="w-full px-4 py-3 font-body"
               style={inputStyle}

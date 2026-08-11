@@ -136,3 +136,12 @@ export async function markSetupComplete(userId: string): Promise<void> {
   const { error } = await supabase.from('users').update({ has_completed_setup: true }).eq('id', userId);
   if (error) throw new Error('SETUP_COMPLETE_FAILED');
 }
+
+// Lets a user who already finished (or skipped) the AI setup wizard go
+// through it again voluntarily from Settings — same direct-write pattern as
+// markSetupComplete, since AppRoutes' needsSetup takeover must see this
+// before the user is routed back into the wizard.
+export async function resetSetup(userId: string): Promise<void> {
+  const { error } = await supabase.from('users').update({ has_completed_setup: false }).eq('id', userId);
+  if (error) throw new Error('SETUP_RESET_FAILED');
+}

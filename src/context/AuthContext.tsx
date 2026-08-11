@@ -13,6 +13,7 @@ import {
   updateWeightUnit as authUpdateWeightUnit,
   markOnboardingSeen as authMarkOnboardingSeen,
   markSetupComplete as authMarkSetupComplete,
+  resetSetup as authResetSetup,
   type AuthUser,
   type WeightUnit,
   type SignUpResult,
@@ -29,6 +30,7 @@ type AuthContextValue = {
   resetPassword: (email: string) => Promise<void>;
   completePasswordReset: (newPassword: string) => Promise<void>;
   completeSetup: () => Promise<void>;
+  resetSetup: () => Promise<void>;
   setWeightUnit: (unit: WeightUnit) => Promise<void>;
   showOnboarding: boolean;
   openOnboarding: () => void;
@@ -113,6 +115,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setNeedsSetup(false);
   };
 
+  const handleResetSetup = async (): Promise<void> => {
+    if (!user) throw new Error('NOT_SIGNED_IN');
+    await authResetSetup(user.id);
+    setUser((u) => (u ? { ...u, hasCompletedSetup: false } : u));
+    setNeedsSetup(true);
+  };
+
   const handleSetWeightUnit = async (unit: WeightUnit): Promise<void> => {
     setUser((u) => (u ? { ...u, weightUnit: unit } : u));
     await authUpdateWeightUnit(getLocalSession()!.id, unit);
@@ -142,6 +151,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPassword: authResetPassword,
         completePasswordReset: handleCompletePasswordReset,
         completeSetup: handleCompleteSetup,
+        resetSetup: handleResetSetup,
         setWeightUnit: handleSetWeightUnit,
         showOnboarding,
         openOnboarding,

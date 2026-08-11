@@ -4,7 +4,7 @@
 -- snapshot of the current schema (tables, RLS policies, storage bucket,
 -- auth trigger) with no personal data or account-specific seeding baked in.
 -- The actual numbered migrations this project runs against its live
--- database (supabase/migrations/001..014) aren't tracked in git — they're
+-- database (supabase/migrations/001..015) aren't tracked in git — they're
 -- this project's private history. If you're forking ReuGym for your own
 -- Supabase project, run this file once against a fresh project instead of
 -- trying to replay that history.
@@ -34,7 +34,7 @@ create table users (
   email                 text unique not null,
   created_at            timestamptz default now(),
   must_change_password  boolean not null default false,
-  weight_unit           text not null default 'kg' check (weight_unit in ('kg', 'lbs')),
+  weight_unit           text not null default 'lbs' check (weight_unit in ('kg', 'lbs')),
   has_seen_onboarding   boolean not null default false,
   has_completed_setup   boolean not null default false
 );
