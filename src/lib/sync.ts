@@ -13,6 +13,7 @@ import {
   rowToCustomExercise,
   rowToLoadoutName,
   rowToActiveLoadout,
+  rowToDefaultExercise,
   type SupabaseTableName,
   type SyncOperation,
   type ReplaceAllPayload,
@@ -69,7 +70,7 @@ async function protectedTemplateIdsFor(
 export async function initialSync(userId: string): Promise<void> {
   const db = getDB(userId);
 
-  const [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts] =
+  const [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts, defaultExercises] =
     await Promise.all([
       supabase.from('workout_sessions').select('*').eq('user_id', userId),
       supabase.from('logged_sets').select('*').eq('user_id', userId),
@@ -80,10 +81,13 @@ export async function initialSync(userId: string): Promise<void> {
       supabase.from('custom_exercises').select('*').eq('user_id', userId),
       supabase.from('loadout_names').select('*').eq('user_id', userId),
       supabase.from('active_loadouts').select('*').eq('user_id', userId),
+      // Shared across every user — the only table read without a user_id
+      // filter, by design (see migration 011_default_exercises.sql).
+      supabase.from('default_exercises').select('*'),
     ]);
 
   // Surface any Supabase errors so SyncGate can show retry UI
-  const errors = [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts]
+  const errors = [sessions, sets, bodyStats, exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts, defaultExercises]
     .map((r) => r.error)
     .filter(Boolean);
   if (errors.length > 0) {
@@ -115,6 +119,7 @@ export async function initialSync(userId: string): Promise<void> {
     db.customExercises.bulkPut((customExercises.data ?? []).map((r) => rowToCustomExercise(r, userId))),
     db.loadoutNames.bulkPut((loadoutNames.data ?? []).map((r) => rowToLoadoutName(r, userId))),
     db.activeLoadouts.bulkPut((activeLoadouts.data ?? []).map((r) => rowToActiveLoadout(r, userId))),
+    db.defaultExercises.bulkPut((defaultExercises.data ?? []).map((r) => rowToDefaultExercise(r))),
   ]);
 
   await db.syncMeta.put({ userId, initialSyncComplete: true, lastSyncedAt: Date.now() });
@@ -135,13 +140,14 @@ export async function deltaSync(userId: string): Promise<number> {
     ]);
 
     // Config tables are small — full re-sync is simpler and more reliable
-    const [exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts] = await Promise.all([
+    const [exercisePrefs, templateExercises, templateStretches, customExercises, loadoutNames, activeLoadouts, defaultExercises] = await Promise.all([
       supabase.from('exercise_prefs').select('*').eq('user_id', userId),
       supabase.from('template_exercises').select('*').eq('user_id', userId),
       supabase.from('template_stretches').select('*').eq('user_id', userId),
       supabase.from('custom_exercises').select('*').eq('user_id', userId),
       supabase.from('loadout_names').select('*').eq('user_id', userId),
       supabase.from('active_loadouts').select('*').eq('user_id', userId),
+      supabase.from('default_exercises').select('*'),
     ]);
 
     const [protectedExerciseIds, protectedStretchIds] = await Promise.all([
@@ -169,6 +175,7 @@ export async function deltaSync(userId: string): Promise<number> {
       db.customExercises.bulkPut((customExercises.data ?? []).map((r) => rowToCustomExercise(r, userId))),
       db.loadoutNames.bulkPut((loadoutNames.data ?? []).map((r) => rowToLoadoutName(r, userId))),
       db.activeLoadouts.bulkPut((activeLoadouts.data ?? []).map((r) => rowToActiveLoadout(r, userId))),
+      db.defaultExercises.bulkPut((defaultExercises.data ?? []).map((r) => rowToDefaultExercise(r))),
     ]);
 
     rowsUpdated =
@@ -180,7 +187,8 @@ export async function deltaSync(userId: string): Promise<number> {
       (templateStretches.data?.length ?? 0) +
       (customExercises.data?.length ?? 0) +
       (loadoutNames.data?.length ?? 0) +
-      (activeLoadouts.data?.length ?? 0);
+      (activeLoadouts.data?.length ?? 0) +
+      (defaultExercises.data?.length ?? 0);
 
     // Log any Dexie write failures without crashing
     writes.forEach((r) => { if (r.status === 'rejected') console.warn('deltaSync write failed:', r.reason); });

@@ -7,7 +7,7 @@ const SESSION_KEY = 'reugym_session';
 
 export type WeightUnit = 'kg' | 'lbs';
 
-export type AuthUser = { id: string; email: string; weightUnit: WeightUnit; hasSeenOnboarding: boolean };
+export type AuthUser = { id: string; email: string; weightUnit: WeightUnit; hasSeenOnboarding: boolean; isAdmin: boolean };
 
 export function getLocalSession(): AuthUser | null {
   try {

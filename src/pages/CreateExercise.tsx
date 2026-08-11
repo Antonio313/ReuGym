@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { nanoid } from 'nanoid';
 import { ArrowLeft, Trash } from '@phosphor-icons/react';
-import { createExercise, updateExercise, deleteCustomExercise, isStaticExercise, useExercises, useStretches } from '@/hooks/useExercises';
+import { createExercise, updateExercise, deleteCustomExercise, useIsDefaultExercise, useExercises, useStretches } from '@/hooks/useExercises';
 import type { ExerciseCategory, ExerciseType, MuscleGroup } from '@/types';
 
 // ─── Schema ─────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export default function CreateExercise() {
     ? [...allExercises, ...allStretchExercises].find((e) => e.id === exerciseId)
     : undefined;
   const isStretch = isStretchParam || (existingExercise?.isStretch ?? false);
-  const isBuiltIn = isEditMode && exerciseId ? isStaticExercise(exerciseId) : false;
+  const isBuiltIn = useIsDefaultExercise(isEditMode ? exerciseId : undefined);
 
   const {
     register,

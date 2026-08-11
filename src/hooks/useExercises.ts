@@ -2,11 +2,9 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { enqueueSync, syncNow } from '@/lib/sync';
-import { exercises as staticExercises } from '@/data/exercises';
-import { stretches as staticStretches } from '@/data/stretches';
 import type { Exercise, ExerciseCategory, ExerciseType, MuscleGroup } from '@/types';
 
-function dexieToExercise(row: {
+export function dexieToExercise(row: {
   id: string; name: string; category: string; type: string; muscles: string[];
   defaultRepRange?: [number, number]; startingWeightKg?: number; restSeconds?: number;
   isBodyweight?: boolean; isCable?: boolean; isTimed?: boolean; isStretch?: boolean;
@@ -53,6 +51,13 @@ function exerciseToSnakeRow(exercise: Exercise, userId: string) {
 export function useExercises(): Exercise[] {
   const user = getLocalSession();
 
+  const defaults = useLiveQuery(async () => {
+    if (!user) return [];
+    const db = getDB(user.id);
+    const rows = await db.defaultExercises.filter((r) => !r.isStretch).toArray();
+    return rows.map(dexieToExercise);
+  }, [user?.id]) ?? [];
+
   const custom = useLiveQuery(async () => {
     if (!user) return [];
     const db = getDB(user.id);
@@ -64,11 +69,18 @@ export function useExercises(): Exercise[] {
   }, [user?.id]) ?? [];
 
   const overriddenIds = new Set(custom.map((e) => e.id));
-  return [...staticExercises.filter((s) => !overriddenIds.has(s.id)), ...custom];
+  return [...defaults.filter((s) => !overriddenIds.has(s.id)), ...custom];
 }
 
 export function useStretches(): Exercise[] {
   const user = getLocalSession();
+
+  const defaults = useLiveQuery(async () => {
+    if (!user) return [];
+    const db = getDB(user.id);
+    const rows = await db.defaultExercises.filter((r) => !!r.isStretch).toArray();
+    return rows.map(dexieToExercise);
+  }, [user?.id]) ?? [];
 
   const custom = useLiveQuery(async () => {
     if (!user) return [];
@@ -81,7 +93,7 @@ export function useStretches(): Exercise[] {
   }, [user?.id]) ?? [];
 
   const overriddenIds = new Set(custom.map((s) => s.id));
-  return [...staticStretches.filter((s) => !overriddenIds.has(s.id)), ...custom];
+  return [...defaults.filter((s) => !overriddenIds.has(s.id)), ...custom];
 }
 
 export async function createExercise(exercise: Exercise): Promise<void> {
@@ -130,6 +142,17 @@ export async function deleteCustomExercise(id: string): Promise<void> {
   await syncNow(user.id);
 }
 
-export function isStaticExercise(id: string): boolean {
-  return staticExercises.some((e) => e.id === id);
+// True iff `id` exists in the shared default library, regardless of whether
+// the current user has also forked it into their own custom_exercises — same
+// semantics as the old static-array check it replaces (see CreateExercise's
+// "Built-in exercise — edits create a custom override" messaging).
+export function useIsDefaultExercise(id: string | undefined): boolean {
+  const user = getLocalSession();
+
+  return useLiveQuery(async () => {
+    if (!user || !id) return false;
+    const db = getDB(user.id);
+    const row = await db.defaultExercises.get(id);
+    return !!row;
+  }, [user?.id, id]) ?? false;
 }

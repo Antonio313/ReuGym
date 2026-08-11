@@ -117,6 +117,24 @@ export type DexieCustomExercise = {
   notes?: string;
 };
 
+// Shared library, not user-scoped — one copy synced into every user's local
+// DB, overridden per-id by a matching customExercises row exactly like the
+// static file it replaced. See migration 011_default_exercises.sql.
+export type DexieDefaultExercise = {
+  id: string;
+  name: string;
+  category: string;
+  type: string;
+  muscles: string[];
+  defaultRepRange?: [number, number];
+  restSeconds?: number;
+  isBodyweight?: boolean;
+  isCable?: boolean;
+  isTimed?: boolean;
+  isStretch?: boolean;
+  videoUrl?: string;
+};
+
 // ─── Sync Infrastructure Types ────────────────────────────────────
 
 export type SupabaseTableName =
@@ -175,6 +193,7 @@ class WorkoutDB extends Dexie {
   templateExercises!: Table<DexieTemplateExercise, string>;
   templateStretches!: Table<DexieTemplateStretch, string>;
   customExercises!: Table<DexieCustomExercise, string>;
+  defaultExercises!: Table<DexieDefaultExercise, string>;
   loadoutNames!: Table<DexieLoadoutName, [string, string]>;
   activeLoadouts!: Table<DexieActiveLoadout, [string, string]>;
   syncQueue!: Table<SyncOperation, string>;
@@ -198,6 +217,9 @@ class WorkoutDB extends Dexie {
     this.version(2).stores({
       loadoutNames:    '[userId+templateId]',
       activeLoadouts:  '[userId+category]',
+    });
+    this.version(3).stores({
+      defaultExercises: 'id',
     });
   }
 }
@@ -341,5 +363,22 @@ export function rowToCustomExercise(r: Row, userId: string): DexieCustomExercise
     isStretch:        r.is_stretch as boolean | undefined,
     videoUrl:         r.video_url as string | undefined,
     notes:            r.notes as string | undefined,
+  };
+}
+
+export function rowToDefaultExercise(r: Row): DexieDefaultExercise {
+  return {
+    id:              r.id as string,
+    name:            r.name as string,
+    category:        r.category as string,
+    type:            r.type as string,
+    muscles:         r.muscles as string[],
+    defaultRepRange: r.default_rep_range as [number, number] | undefined,
+    restSeconds:     r.rest_seconds as number | undefined,
+    isBodyweight:    r.is_bodyweight as boolean | undefined,
+    isCable:         r.is_cable as boolean | undefined,
+    isTimed:         r.is_timed as boolean | undefined,
+    isStretch:       r.is_stretch as boolean | undefined,
+    videoUrl:        r.video_url as string | undefined,
   };
 }

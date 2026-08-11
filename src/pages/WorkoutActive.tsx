@@ -8,7 +8,7 @@ import { RestTimer } from '@/components/workout/RestTimer';
 import { FeelingMeter } from '@/components/workout/FeelingMeter';
 import { WorkoutComplete, type CompletionStats } from '@/components/workout/WorkoutComplete';
 import { useTemplate } from '@/hooks/useTemplates';
-import { useExercises, useStretches } from '@/hooks/useExercises';
+import { useExercises, useStretches, dexieToExercise } from '@/hooks/useExercises';
 import { useDayStretches } from '@/hooks/useDayStretches';
 import { loadAllPrefs } from '@/hooks/useExercisePref';
 import { fetchLastSetData } from '@/hooks/useLastSetData';
@@ -18,7 +18,6 @@ import { getLocalSession } from '@/lib/auth';
 import { getDB } from '@/data/db';
 import { enqueueSync } from '@/lib/sync';
 import { templateMap as defaultTemplateMap } from '@/data/templates';
-import { exerciseMap as staticExerciseMap } from '@/data/exercises';
 import { playTimerEnd } from '@/lib/audio';
 import { haptics } from '@/lib/haptics';
 import { resolveStartingWeight } from '@/lib/weights';
@@ -708,7 +707,12 @@ export default function WorkoutActive() {
       incrementSetNumber();
       startRestTimer(currTE.restSeconds);
     } else {
-      const exercise = exerciseMap.get(currTE.exerciseId) ?? staticExerciseMap.get(currTE.exerciseId);
+      let exercise = exerciseMap.get(currTE.exerciseId);
+      if (!exercise) {
+        const user = getLocalSession();
+        const row = user ? await getDB(user.id).defaultExercises.get(currTE.exerciseId) : undefined;
+        exercise = row ? dexieToExercise(row) : undefined;
+      }
       const restSecs = currTE.restSeconds;
 
       if (hasMoreMain) {

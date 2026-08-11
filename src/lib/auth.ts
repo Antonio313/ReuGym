@@ -1,3 +1,4 @@
+import type { User } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { enqueueSync, syncNow } from './sync';
 import { getLocalSession, setLocalSession, clearLocalSession } from './session';
@@ -6,49 +7,88 @@ import type { AuthUser, WeightUnit } from './session';
 export { getLocalSession, setLocalSession, clearLocalSession };
 export type { AuthUser, WeightUnit };
 
-export async function signIn(email: string): Promise<AuthUser> {
+export type SignUpResult =
+  | { status: 'signed_in' }
+  | { status: 'confirm_email' };
+
+// Single place that turns a Supabase Auth user + its public.users profile
+// row into the app's AuthUser shape. Used by AuthContext's onAuthStateChange
+// listener, which is the one source of truth for session state — signIn/
+// signUp below only trigger the underlying Supabase call and surface errors;
+// they don't set local session state themselves, to avoid a double-load race
+// with the listener firing for the same event.
+export async function loadProfile(authUser: User): Promise<{ user: AuthUser; mustChangePassword: boolean }> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, weight_unit, has_seen_onboarding')
-    .eq('email', email.toLowerCase().trim())
+    .select('id, email, weight_unit, has_seen_onboarding, must_change_password')
+    .eq('id', authUser.id)
     .single();
-  if (error || !data) throw new Error('NO_ACCOUNT');
-  const user = {
+  if (error || !data) throw new Error('PROFILE_NOT_FOUND');
+
+  const user: AuthUser = {
     id: data.id as string,
     email: data.email as string,
     weightUnit: (data.weight_unit as WeightUnit) ?? 'kg',
     hasSeenOnboarding: (data.has_seen_onboarding as boolean) ?? false,
+    isAdmin: authUser.app_metadata?.is_admin === true,
   };
-  setLocalSession(user);
-  return user;
+  return { user, mustChangePassword: (data.must_change_password as boolean) ?? false };
 }
 
-export async function signUp(email: string): Promise<AuthUser> {
+export async function signIn(email: string, password: string): Promise<void> {
+  const { error } = await supabase.auth.signInWithPassword({
+    email: email.toLowerCase().trim(),
+    password,
+  });
+  if (error) {
+    if (error.message.toLowerCase().includes('email not confirmed')) throw new Error('EMAIL_NOT_CONFIRMED');
+    throw new Error('INVALID_CREDENTIALS');
+  }
+}
+
+export async function signUp(email: string, password: string): Promise<SignUpResult> {
   const trimmed = email.toLowerCase().trim();
-  const { data: existing } = await supabase
+  const { data, error } = await supabase.auth.signUp({
+    email: trimmed,
+    password,
+    options: { emailRedirectTo: window.location.origin },
+  });
+  if (error) {
+    if (error.message.toLowerCase().includes('already registered')) throw new Error('ALREADY_EXISTS');
+    throw new Error('SIGNUP_FAILED');
+  }
+  // Supabase returns a user with no identities (instead of an error) when
+  // signing up with an email that's already registered and confirmed —
+  // avoids leaking which emails exist.
+  if (!data.user || data.user.identities?.length === 0) throw new Error('ALREADY_EXISTS');
+
+  const { error: profileError } = await supabase
     .from('users')
-    .select('id')
-    .eq('email', trimmed)
-    .maybeSingle();
-  if (existing) throw new Error('ALREADY_EXISTS');
-  const { data, error } = await supabase
-    .from('users')
-    .insert({ email: trimmed })
-    .select('id, email, weight_unit, has_seen_onboarding')
-    .single();
-  if (error || !data) throw new Error('SIGNUP_FAILED');
-  const user = {
-    id: data.id as string,
-    email: data.email as string,
-    weightUnit: (data.weight_unit as WeightUnit) ?? 'kg',
-    hasSeenOnboarding: (data.has_seen_onboarding as boolean) ?? false,
-  };
-  setLocalSession(user);
-  return user;
+    .insert({ id: data.user.id, email: trimmed });
+  if (profileError) throw new Error('SIGNUP_FAILED');
+
+  return data.session ? { status: 'signed_in' } : { status: 'confirm_email' };
 }
 
-export function signOut(): void {
+export async function signOut(): Promise<void> {
+  await supabase.auth.signOut();
   clearLocalSession();
+}
+
+export async function resetPassword(email: string): Promise<void> {
+  const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
+    redirectTo: window.location.origin,
+  });
+  if (error) throw new Error('RESET_FAILED');
+}
+
+// Called both when a signed-in user changes their password voluntarily
+// (Settings) and when a migrated/recovering user sets one for the first
+// time — either way, the account is no longer on a default/unknown password.
+export async function setNewPassword(userId: string, newPassword: string): Promise<void> {
+  const { error } = await supabase.auth.updateUser({ password: newPassword });
+  if (error) throw new Error('PASSWORD_UPDATE_FAILED');
+  await supabase.from('users').update({ must_change_password: false }).eq('id', userId);
 }
 
 // Optimistic: updates the local session immediately (so the UI reflects the

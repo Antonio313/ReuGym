@@ -17,6 +17,8 @@ import SyncDebug from '@/pages/SyncDebug';
 import Settings from '@/pages/Settings';
 import SignIn from '@/pages/SignIn';
 import SignUp from '@/pages/SignUp';
+import ForgotPassword from '@/pages/ForgotPassword';
+import SetPassword from '@/pages/SetPassword';
 
 function StretchEditRedirect() {
   const { id } = useParams<{ id: string }>();
@@ -24,7 +26,7 @@ function StretchEditRedirect() {
 }
 
 function AppRoutes() {
-  const { user, loading } = useAuth();
+  const { user, loading, needsPasswordReset } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -44,7 +46,18 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="/signup" element={<SignUp />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route path="*" element={<SignIn />} />
+      </Routes>
+    );
+  }
+
+  // Migrated/recovering accounts must set a real password before touching
+  // anything else — takes over the whole route tree regardless of path.
+  if (needsPasswordReset) {
+    return (
+      <Routes>
+        <Route path="*" element={<SetPassword />} />
       </Routes>
     );
   }

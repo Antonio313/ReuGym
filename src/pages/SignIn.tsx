@@ -6,20 +6,21 @@ export default function SignIn() {
   const { signIn } = useAuth();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!email.trim()) return;
+    if (!email.trim() || !password) return;
     setLoading(true);
     setError(null);
     try {
-      await signIn(email);
+      await signIn(email, password);
       navigate('/');
     } catch (err) {
       const msg = err instanceof Error ? err.message : '';
-      setError(msg === 'NO_ACCOUNT' ? 'NO_ACCOUNT' : 'Something went wrong. Try again.');
+      setError(msg === 'EMAIL_NOT_CONFIRMED' ? 'EMAIL_NOT_CONFIRMED' : 'INVALID_CREDENTIALS');
     } finally {
       setLoading(false);
     }
@@ -70,26 +71,59 @@ export default function SignIn() {
           />
         </div>
 
-        {error === 'NO_ACCOUNT' && (
+        <div>
+          <div className="flex items-baseline justify-between mb-1">
+            <p
+              className="font-body uppercase tracking-widest"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+            >
+              Password
+            </p>
+            <Link
+              to="/forgot-password"
+              className="font-body"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-accent)' }}
+            >
+              Forgot password?
+            </Link>
+          </div>
+          <input
+            type="password"
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setError(null); }}
+            placeholder="••••••••"
+            className="w-full px-4 py-3 font-body"
+            style={{
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+              fontSize: 'var(--text-body)',
+              outline: 'none',
+            }}
+          />
+        </div>
+
+        {error === 'EMAIL_NOT_CONFIRMED' && (
           <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-            No account found.{' '}
-            <Link to="/signup" style={{ color: 'var(--color-accent)' }}>Create one →</Link>
+            Please confirm your email before signing in — check your inbox for the confirmation link.
           </p>
         )}
-        {error && error !== 'NO_ACCOUNT' && (
+        {error === 'INVALID_CREDENTIALS' && (
           <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}>
-            {error}
+            Incorrect email or password.
           </p>
         )}
 
         <button
           type="submit"
-          disabled={loading || !email.trim()}
+          disabled={loading || !email.trim() || !password}
           className="w-full py-4 font-display uppercase tracking-wide"
           style={{
             fontSize: 'var(--text-h2)',
-            background: loading || !email.trim() ? 'var(--color-surface-2)' : 'var(--color-accent)',
-            color: loading || !email.trim() ? 'var(--color-text-muted)' : '#fff',
+            background: loading || !email.trim() || !password ? 'var(--color-surface-2)' : 'var(--color-accent)',
+            color: loading || !email.trim() || !password ? 'var(--color-text-muted)' : '#fff',
             borderRadius: 'var(--radius-md)',
             border: 'none',
             letterSpacing: '0.05em',

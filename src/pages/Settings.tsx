@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, BookOpen } from '@phosphor-icons/react';
+import { ArrowLeft, BookOpen, LockKey, SignOut, ArrowsClockwise } from '@phosphor-icons/react';
 import { PageShell } from '@/components/layout/PageShell';
+import { PasswordForm } from '@/components/auth/PasswordForm';
 import { useAuth } from '@/context/AuthContext';
+import { useExercises, useStretches } from '@/hooks/useExercises';
+import { syncLibraryToDefaults } from '@/lib/adminExerciseSync';
 import type { WeightUnit } from '@/lib/auth';
 
 const UNITS: { id: WeightUnit; label: string }[] = [
@@ -12,8 +15,15 @@ const UNITS: { id: WeightUnit; label: string }[] = [
 
 export default function Settings() {
   const navigate = useNavigate();
-  const { user, setWeightUnit, openOnboarding } = useAuth();
+  const { user, setWeightUnit, openOnboarding, completePasswordReset, signOut } = useAuth();
   const [saving, setSaving] = useState<WeightUnit | null>(null);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [passwordChanged, setPasswordChanged] = useState(false);
+  const exercises = useExercises();
+  const stretches = useStretches();
+  const [syncing, setSyncing] = useState(false);
+  const [syncResult, setSyncResult] = useState<number | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const handleSelect = async (unit: WeightUnit) => {
     if (!user || unit === user.weightUnit) return;
@@ -22,6 +32,31 @@ export default function Settings() {
       await setWeightUnit(unit);
     } finally {
       setSaving(null);
+    }
+  };
+
+  const handleChangePassword = async (password: string) => {
+    await completePasswordReset(password);
+    setShowPasswordForm(false);
+    setPasswordChanged(true);
+  };
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/');
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    setSyncError(null);
+    setSyncResult(null);
+    try {
+      const count = await syncLibraryToDefaults(exercises, stretches);
+      setSyncResult(count);
+    } catch (err) {
+      setSyncError(err instanceof Error ? err.message : 'Sync failed.');
+    } finally {
+      setSyncing(false);
     }
   };
 
@@ -49,6 +84,69 @@ export default function Settings() {
       <main className="px-4 py-5">
         <p
           className="font-body uppercase tracking-widest mb-3"
+          style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+        >
+          Account
+        </p>
+
+        {user && (
+          <p className="font-body mb-3" style={{ fontSize: 'var(--text-body)', color: 'var(--color-text)' }}>
+            {user.email}
+          </p>
+        )}
+
+        {!showPasswordForm && (
+          <button
+            type="button"
+            onClick={() => { setShowPasswordForm(true); setPasswordChanged(false); }}
+            className="flex items-center gap-3 w-full py-4 px-4 font-body"
+            style={{
+              fontSize: 'var(--text-body)',
+              background: 'var(--color-surface)',
+              border: 'var(--border-thin)',
+              borderRadius: 'var(--radius-md)',
+              color: 'var(--color-text)',
+            }}
+          >
+            <LockKey size={20} style={{ color: 'var(--color-text-muted)' }} />
+            Change password
+          </button>
+        )}
+
+        {showPasswordForm && (
+          <div className="py-1">
+            <PasswordForm
+              onSubmit={handleChangePassword}
+              submitLabel="Update Password"
+              loadingLabel="Saving…"
+            />
+          </div>
+        )}
+
+        {passwordChanged && (
+          <p className="font-body mt-2" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-success)' }}>
+            Password updated.
+          </p>
+        )}
+
+        <button
+          type="button"
+          onClick={() => void handleSignOut()}
+          className="flex items-center gap-3 w-full py-4 px-4 font-body mt-2"
+          style={{
+            fontSize: 'var(--text-body)',
+            background: 'var(--color-surface)',
+            border: 'var(--border-thin)',
+            borderRadius: 'var(--radius-md)',
+            color: 'var(--color-text-muted)',
+          }}
+        >
+          <SignOut size={20} />
+          Sign out
+        </button>
+
+        <p
+          className="font-body uppercase tracking-widest mb-3 mt-8"
           style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
         >
           Weight Unit
@@ -112,6 +210,45 @@ export default function Settings() {
           <BookOpen size={20} style={{ color: 'var(--color-text-muted)' }} />
           Replay welcome guide
         </button>
+
+        {user?.isAdmin && (
+          <>
+            <p
+              className="font-body uppercase tracking-widest mb-3 mt-8"
+              style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-muted)' }}
+            >
+              Admin
+            </p>
+
+            <button
+              type="button"
+              onClick={() => void handleSync()}
+              disabled={syncing}
+              className="flex items-center gap-3 w-full py-4 px-4 font-body"
+              style={{
+                fontSize: 'var(--text-body)',
+                background: 'var(--color-surface)',
+                border: 'var(--border-thin)',
+                borderRadius: 'var(--radius-md)',
+                color: 'var(--color-text)',
+              }}
+            >
+              <ArrowsClockwise size={20} style={{ color: 'var(--color-text-muted)' }} />
+              {syncing ? 'Syncing…' : 'Sync library to defaults'}
+            </button>
+
+            {syncResult != null && (
+              <p className="font-body mt-2" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-success)' }}>
+                Synced {syncResult} exercises.
+              </p>
+            )}
+            {syncError && (
+              <p className="font-body mt-2" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-regression)' }}>
+                {syncError}
+              </p>
+            )}
+          </>
+        )}
       </main>
     </PageShell>
   );
