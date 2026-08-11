@@ -1,0 +1,71 @@
+<!--
+  Supabase Auth email template: Confirm signup.
+  Paste this into Supabase Dashboard → Authentication → Email Templates → Confirm signup.
+  Kept here as a version-controlled reference — Supabase doesn't support
+  deploying these from a repo, same as the ai-assistant edge function.
+
+  Email clients don't reliably load custom fonts or modern CSS, so this uses
+  table-based layout, inline styles, and system font fallbacks instead of
+  ReuGym's actual Anton/Inter Tight stack — the bold letter-spaced heading
+  approximates the wordmark's feel without depending on font loading.
+-->
+<div style="background-color:#0A0A0A; padding:32px 16px; font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="480" cellpadding="0" cellspacing="0" border="0" style="max-width:480px; width:100%; background-color:#1A1A1A; border:1px solid #2A2A2A; border-radius:4px;">
+          <tr>
+            <td align="center" style="padding:40px 32px 24px 32px;">
+              <img src="https://raw.githubusercontent.com/Antonio313/ReuGym/main/public/icons/icon-512.png" width="56" height="56" alt="ReuGym" style="display:block; border-radius:8px;" />
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 32px;">
+              <div style="font-size:13px; font-weight:700; letter-spacing:0.12em; color:#888880; text-transform:uppercase;">
+                REUGYM
+              </div>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:20px 32px 0 32px;">
+              <h1 style="margin:0; font-size:24px; font-weight:700; color:#F5F5F0; letter-spacing:-0.01em;">
+                Confirm your email
+              </h1>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:12px 32px 32px 32px;">
+              <p style="margin:0; font-size:15px; line-height:1.5; color:#888880;">
+                Follow the link below to confirm your email address and finish setting up your account.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td align="center" style="padding:0 32px 40px 32px;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td align="center" style="border-radius:4px; background-color:#FF4D00;">
+                    <a href="{{ .ConfirmationURL }}" target="_blank" style="display:inline-block; padding:14px 32px; font-size:15px; font-weight:700; color:#FFFFFF; text-decoration:none; letter-spacing:0.02em;">
+                      Confirm email address
+                    </a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0 32px 32px 32px; border-top:1px solid #2A2A2A;">
+              <p style="margin:24px 0 0 0; font-size:12px; line-height:1.5; color:#444440;">
+                If the button above doesn't work, copy and paste this link into your browser:<br />
+                <a href="{{ .ConfirmationURL }}" style="color:#888880; word-break:break-all;">{{ .ConfirmationURL }}</a>
+              </p>
+              <p style="margin:16px 0 0 0; font-size:12px; line-height:1.5; color:#444440;">
+                If you didn't create a ReuGym account, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</div>

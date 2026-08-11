@@ -11,6 +11,13 @@ export type SignUpResult =
   | { status: 'signed_in' }
   | { status: 'confirm_email' };
 
+// Confirmation/reset emails always redirect here rather than to
+// window.location.origin — signup can happen from a local dev server that
+// won't be running by the time the email is opened, so the link must point
+// somewhere permanently reachable. Falls back to window.location.origin only
+// so a fork without VITE_SITE_URL configured doesn't get a broken redirect.
+const SITE_URL = import.meta.env.VITE_SITE_URL || window.location.origin;
+
 // Single place that turns a Supabase Auth user + its public.users profile
 // row into the app's AuthUser shape. Used by AuthContext's onAuthStateChange
 // listener, which is the one source of truth for session state — signIn/
@@ -52,7 +59,7 @@ export async function signUp(email: string, password: string): Promise<SignUpRes
   const { data, error } = await supabase.auth.signUp({
     email: trimmed,
     password,
-    options: { emailRedirectTo: window.location.origin },
+    options: { emailRedirectTo: SITE_URL },
   });
   if (error) {
     if (error.message.toLowerCase().includes('already registered')) throw new Error('ALREADY_EXISTS');
@@ -80,7 +87,7 @@ export async function signOut(): Promise<void> {
 
 export async function resetPassword(email: string): Promise<void> {
   const { error } = await supabase.auth.resetPasswordForEmail(email.toLowerCase().trim(), {
-    redirectTo: window.location.origin,
+    redirectTo: SITE_URL,
   });
   if (error) throw new Error('RESET_FAILED');
 }
