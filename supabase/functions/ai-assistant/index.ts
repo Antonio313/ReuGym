@@ -39,60 +39,76 @@ interface AnthropicResponse { stop_reason: string; content: ContentBlock[] }
 
 // ─── Tool definitions ─────────────────────────────────────────────
 
+// NOTE on architecture: weight/rest/bodyweight/timed/per-side are NOT
+// exercise-level properties in this schema (see custom_exercises /
+// default_exercises) — they're configured per template-assignment, on
+// template_exercises / template_stretches (migrations 002, 003, 007),
+// exactly mirroring what a human sets in the Template Editor when adding an
+// exercise to a day. create_custom_exercise below only captures identity
+// (name/category/muscles/etc.), matching CreateExercise.tsx's own form —
+// add_exercise_to_template / add_stretch_to_template are where the AI must
+// decide sets/rep-range/rest/bodyweight/timed/per-side for THIS assignment.
 const TOOLS = [
   {
     name: 'add_exercise_to_template',
-    description: 'Add an existing exercise from the library to a workout template.',
+    description: 'Add an existing (or just-created) exercise to a workout template, configuring how it runs for that day — mirrors the Template Editor.',
     input_schema: {
       type: 'object',
       properties: {
-        templateId:  { type: 'string', description: 'push, pull, legs, core, glutes, or back' },
-        exerciseId:  { type: 'string', description: 'Exact exercise ID from the library or a just-created exercise ID' },
-        sets:        { type: 'number', description: 'Number of sets' },
-        repRangeMin: { type: 'number', description: 'Min reps, or min seconds for timed exercises' },
-        repRangeMax: { type: 'number', description: 'Max reps, or max seconds for timed exercises' },
+        templateId:       { type: 'string', description: 'push, pull, legs, core, glutes, or back for the gym version; push-l2, pull-l2, etc. for the home/no-equipment version (loadout 2)' },
+        exerciseId:       { type: 'string', description: 'Exact exercise ID from the library or a just-created exercise ID' },
+        sets:             { type: 'number', description: 'Number of sets' },
+        repRangeMin:      { type: 'number', description: 'Min reps, or min seconds if isTimed' },
+        repRangeMax:      { type: 'number', description: 'Max reps, or max seconds if isTimed' },
+        isBodyweight:     { type: 'boolean', description: 'True if no external weight is used for this assignment' },
+        isTimed:          { type: 'boolean', description: 'True if effort is measured in seconds, not reps (plank, dead hang, etc.)' },
+        isPerSide:        { type: 'boolean', description: 'True if it alternates left/right with no rest between sides (e.g. cable woodchopper), logged as independent sides' },
+        startingWeightKg: { type: 'number', description: 'Starting weight in kg. 0 for bodyweight/timed/cable exercises. Omit to default to 0.' },
+        restSeconds:      { type: 'number', description: 'Rest between sets in seconds. Omit to default to 60.' },
       },
-      required: ['templateId', 'exerciseId', 'sets', 'repRangeMin', 'repRangeMax'],
+      required: ['templateId', 'exerciseId', 'sets', 'repRangeMin', 'repRangeMax', 'isBodyweight', 'isTimed', 'isPerSide'],
     },
   },
   {
     name: 'add_stretch_to_template',
-    description: 'Add a stretch to a workout template pre or post routine.',
+    description: 'Add a stretch to a workout template pre or post routine, configuring how it runs for that day — mirrors the Template Editor.',
     input_schema: {
       type: 'object',
       properties: {
-        templateId:  { type: 'string', description: 'push, pull, legs, core, glutes, or back' },
-        stretchId:   { type: 'string', description: 'Exact stretch ID from the library or a just-created stretch ID' },
-        phase:       { type: 'string', enum: ['pre', 'post'], description: 'Pre-workout or post-workout' },
-        restSeconds: { type: 'number', description: 'Hold duration in seconds, typically 20–60' },
+        templateId:       { type: 'string', description: 'push, pull, legs, core, glutes, or back for the gym version; push-l2, pull-l2, etc. for the home/no-equipment version (loadout 2)' },
+        stretchId:        { type: 'string', description: 'Exact stretch ID from the library or a just-created stretch ID' },
+        phase:            { type: 'string', enum: ['pre', 'post'], description: 'Pre-workout or post-workout' },
+        sets:             { type: 'number', description: 'Number of sets/rounds. Usually 1.' },
+        repRangeMin:      { type: 'number', description: 'Min reps, or min seconds if isTimed' },
+        repRangeMax:      { type: 'number', description: 'Max reps, or max seconds if isTimed' },
+        isBodyweight:     { type: 'boolean' },
+        isTimed:          { type: 'boolean', description: 'True if held for a duration (most stretches), false if counted in reps' },
+        restSeconds:      { type: 'number', description: 'Rest between sets in seconds, typically 10–30' },
+        startingWeightKg: { type: 'number', description: 'Almost always 0 for stretches. Omit to default to 0.' },
       },
-      required: ['templateId', 'stretchId', 'phase', 'restSeconds'],
+      required: ['templateId', 'stretchId', 'phase', 'sets', 'repRangeMin', 'repRangeMax', 'isBodyweight', 'isTimed', 'restSeconds'],
     },
   },
   {
     name: 'create_custom_exercise',
-    description: 'Create a new exercise or stretch not in the library. Returns an ID you can use with add_exercise_to_template or add_stretch_to_template.',
+    description: 'Create a new exercise or stretch not in the library — identity only (matches the app\'s own "new exercise" form). Returns an ID; configure how it\'s used (sets/weight/rest/timed/etc.) via add_exercise_to_template or add_stretch_to_template.',
     input_schema: {
       type: 'object',
       properties: {
-        name:               { type: 'string' },
-        category:           { type: 'string', enum: ['push', 'pull', 'legs', 'core', 'glutes', 'back'] },
-        type:               { type: 'string', enum: ['compound', 'accessory', 'plyo', 'isometric'] },
-        muscles:            { type: 'array', items: { type: 'string' }, description: 'e.g. ["chest","triceps"]' },
-        defaultRepRangeMin: { type: 'number', description: 'For timed: seconds (e.g. 20)' },
-        defaultRepRangeMax: { type: 'number', description: 'For timed: seconds (e.g. 45)' },
-        startingWeightKg:   { type: 'number', description: '0 for bodyweight / timed / cable exercises' },
-        restSeconds:        { type: 'number', description: 'Rest between sets in seconds' },
-        isBodyweight:       { type: 'boolean' },
-        isTimed:            { type: 'boolean', description: 'True if effort is measured in seconds (plank, dead hang, etc.)' },
-        isStretch:          { type: 'boolean', description: 'True if this is a stretch, not a strength exercise' },
+        name:      { type: 'string' },
+        category:  { type: 'string', enum: ['push', 'pull', 'legs', 'core', 'glutes', 'back', 'general'], description: '"general" is for stretches not tied to one day' },
+        type:      { type: 'string', enum: ['compound', 'accessory', 'plyo', 'isometric'] },
+        muscles:   { type: 'array', items: { type: 'string' }, description: 'e.g. ["chest","triceps"]' },
+        isStretch: { type: 'boolean', description: 'True if this is a stretch, not a strength exercise' },
+        videoUrl:  { type: 'string', description: 'Optional reference video URL' },
+        notes:     { type: 'string', description: 'Optional short form/technique note' },
       },
-      required: ['name', 'category', 'type', 'muscles', 'defaultRepRangeMin', 'defaultRepRangeMax', 'startingWeightKg', 'restSeconds', 'isBodyweight', 'isTimed', 'isStretch'],
+      required: ['name', 'category', 'type', 'muscles', 'isStretch'],
     },
   },
   {
     name: 'set_starting_weight',
-    description: 'Set the suggested starting weight and reps/duration for an exercise for this user. Call this for every exercise you add.',
+    description: "Set this user's actual starting weight/reps for an exercise — takes precedence over the template's fallback and is what actually progresses over time. Call this for every weighted exercise you add.",
     input_schema: {
       type: 'object',
       properties: {
@@ -166,8 +182,18 @@ function buildSystemPrompt(body: RequestBody): string {
 - When asked to add or create anything, call the relevant tool immediately. Do not describe what you will do first.
 - ALWAYS use exact ID strings from the exercise/stretch library. Never invent IDs.
 - If an exercise or stretch is not in the library, use create_custom_exercise to create it, then use the returned ID.
-- For TIMED exercises (marked "timed" in library): rep range = seconds (e.g. 20–45), startingWeightKg = 0, startingReps = starting duration in seconds.
-- Call set_starting_weight for EVERY exercise/stretch you add so the user starts at an appropriate level.
+  create_custom_exercise only captures identity (name/category/type/muscles) — it does NOT set weight, rest,
+  bodyweight, or timed. Those are configured per assignment when you call add_exercise_to_template /
+  add_stretch_to_template, exactly like a human would in the Template Editor: the same exercise can be
+  bodyweight in one template and weighted in another, so decide isBodyweight/isTimed/isPerSide fresh each time
+  based on what you know about the exercise, not from a stored default.
+- For TIMED assignments (isTimed: true): rep range = seconds (e.g. 20–45), startingWeightKg = 0, and if calling
+  set_starting_weight, startingReps = starting duration in seconds.
+- Call set_starting_weight for EVERY weighted exercise you add so the user starts at an appropriate level — this
+  is the user's actual working weight and takes precedence over add_exercise_to_template's startingWeightKg,
+  which is only a fallback.
+- To build both a gym and a home/no-equipment version of a day, call add_exercise_to_template twice with the
+  base templateId (gym) and the -l2 templateId (home) — they're independent exercise lists.
 - After all tool calls, give a brief 1–2 sentence summary of what was planned.
 - You can suggest exercises and stretches that are not in the library — use your own knowledge to create them.
 
@@ -201,8 +227,12 @@ async function callClaude(messages: unknown[], system: string, apiKey: string): 
       'content-type': 'application/json',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
-      max_tokens: 2048,
+      model: 'claude-sonnet-5',
+      // Sized for building a full multi-day, multi-loadout program from
+      // scratch (the setup wizard) rather than a single small chat edit —
+      // this is now the only caller, so it's safe to size for the heavier
+      // case.
+      max_tokens: 8000,
       system,
       tools: TOOLS,
       messages,
@@ -224,21 +254,21 @@ async function executeActions(
     try {
       if (action.kind === 'create_exercise') {
         const { error } = await db.from('custom_exercises').insert({
-          id:                action.id,
-          user_id:           userId,
-          name:              action.name,
-          category:          action.category,
-          type:              action.exerciseType,
-          muscles:           action.muscles,
-          default_rep_range: [action.defaultRepRangeMin, action.defaultRepRangeMax],
-          starting_weight_kg: action.startingWeightKg,
-          rest_seconds:      action.restSeconds,
-          is_bodyweight:     action.isBodyweight,
-          is_cable:          false,
-          is_timed:          action.isTimed ?? false,
-          is_stretch:        action.isStretch ?? false,
-          video_url:         null,
-          notes:             null,
+          id:                 action.id,
+          user_id:            userId,
+          name:               action.name,
+          category:           action.category,
+          type:               action.exerciseType,
+          muscles:            action.muscles,
+          default_rep_range:  null,
+          starting_weight_kg: 0,
+          rest_seconds:       60,
+          is_bodyweight:      false,
+          is_cable:           false,
+          is_timed:           false,
+          is_stretch:         action.isStretch ?? false,
+          video_url:          action.videoUrl ?? null,
+          notes:              action.notes ?? null,
         });
         if (!error) applied.push(action.label as string);
 
@@ -252,6 +282,11 @@ async function executeActions(
           user_id: userId, template_id: action.templateId,
           exercise_id: action.exerciseId, position: pos,
           sets: action.sets, rep_range_min: action.repRangeMin, rep_range_max: action.repRangeMax,
+          starting_weight_kg: action.startingWeightKg ?? 0,
+          rest_seconds: action.restSeconds ?? 60,
+          is_bodyweight: action.isBodyweight ?? false,
+          is_timed: action.isTimed ?? false,
+          is_per_side: action.isPerSide ?? false,
           is_superset: false, superset_group_id: null,
         });
         if (!error) applied.push(action.label as string);
@@ -265,7 +300,13 @@ async function executeActions(
           id: crypto.randomUUID().replace(/-/g, '').slice(0, 21),
           user_id: userId, template_id: action.templateId,
           exercise_id: action.stretchId, phase: action.phase,
-          position: pos, rest_seconds: action.restSeconds,
+          position: pos, rest_seconds: action.restSeconds ?? 30,
+          sets: action.sets ?? 1,
+          rep_range_min: action.repRangeMin ?? 1,
+          rep_range_max: action.repRangeMax ?? 1,
+          starting_weight_kg: action.startingWeightKg ?? 0,
+          is_bodyweight: action.isBodyweight ?? false,
+          is_timed: action.isTimed ?? false,
         });
         if (!error) applied.push(action.label as string);
 
@@ -303,7 +344,9 @@ async function planMode(
   // Track newly created exercises/stretches so add calls can resolve names
   const createdItems: Array<{ id: string; name: string }> = [];
 
-  for (let round = 0; round < 6; round++) {
+  // A full program (several days × up to two loadouts each) takes many more
+  // tool-call rounds than a single chat edit did.
+  for (let round = 0; round < 12; round++) {
     const apiResp = await callClaude(messages, system, apiKey);
 
     if (apiResp.stop_reason !== 'tool_use') {
@@ -326,20 +369,20 @@ async function planMode(
         proposedActions.push({
           kind: 'create_exercise', id, label: `Create ${isStretch ? 'stretch' : 'exercise'}: ${inp.name as string} (${inp.category as string})`,
           name: inp.name, category: inp.category, exerciseType: inp.type, muscles: inp.muscles,
-          defaultRepRangeMin: inp.defaultRepRangeMin, defaultRepRangeMax: inp.defaultRepRangeMax,
-          startingWeightKg: inp.startingWeightKg, restSeconds: inp.restSeconds,
-          isBodyweight: inp.isBodyweight, isTimed: inp.isTimed ?? false, isStretch,
+          isStretch, videoUrl: inp.videoUrl, notes: inp.notes,
         });
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ success: true, exerciseId: id, name: inp.name }) });
 
       } else if (block.name === 'add_exercise_to_template') {
         const exId   = inp.exerciseId as string;
         const exName = exerciseLibrary.find(e => e.id === exId)?.name ?? createdItems.find(c => c.id === exId)?.name ?? exId;
-        const isTimed = exerciseLibrary.find(e => e.id === exId)?.isTimed ?? false;
+        const isTimed = (inp.isTimed as boolean) ?? false;
         const unit    = isTimed ? 's' : '';
         proposedActions.push({
           kind: 'add_to_template', templateId: inp.templateId, exerciseId: exId,
           sets: inp.sets, repRangeMin: inp.repRangeMin, repRangeMax: inp.repRangeMax,
+          isBodyweight: inp.isBodyweight, isTimed, isPerSide: inp.isPerSide,
+          startingWeightKg: inp.startingWeightKg, restSeconds: inp.restSeconds,
           label: `Add ${exName} to ${inp.templateId as string} day — ${inp.sets as number}×${inp.repRangeMin as number}–${inp.repRangeMax as number}${unit}`,
         });
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ success: true }) });
@@ -350,6 +393,8 @@ async function planMode(
         proposedActions.push({
           kind: 'add_stretch', templateId: inp.templateId, stretchId: stId,
           phase: inp.phase, restSeconds: inp.restSeconds,
+          sets: inp.sets, repRangeMin: inp.repRangeMin, repRangeMax: inp.repRangeMax,
+          isBodyweight: inp.isBodyweight, isTimed: inp.isTimed, startingWeightKg: inp.startingWeightKg,
           label: `Add ${stName} to ${inp.templateId as string} ${inp.phase as string}-workout (${inp.restSeconds as number}s)`,
         });
         toolResults.push({ type: 'tool_result', tool_use_id: block.id, content: JSON.stringify({ success: true }) });

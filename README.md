@@ -1,73 +1,26 @@
-# React + TypeScript + Vite
+# ReuGym
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A personal workout tracking PWA — offline-first (Dexie/IndexedDB) with a Supabase backend for sync across devices, real email/password auth, and an AI-assisted onboarding wizard that builds your first program from a short intake form.
 
-Currently, two official plugins are available:
+## Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+Vite + React + TypeScript, Tailwind v4, Zustand, Dexie, Supabase (Postgres + Auth + Storage + Edge Functions), Claude (Anthropic API) for the setup wizard.
 
-## React Compiler
+## Running locally
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```bash
+npm install
+cp .env.example .env.local   # fill in your own Supabase project's URL/keys
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+## Self-hosting / forking
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+This repo's own `supabase/migrations/` (the numbered history of schema changes made against the live project) isn't tracked in git — it's this project's private history, not a generic starting point. If you're setting up your own Supabase project instead:
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+1. Create a new Supabase project.
+2. Paste `supabase/schema.example.sql` into the SQL editor and run it — it's a single consolidated bootstrap of the full current schema (tables, RLS policies, storage bucket, the auth trigger that creates a profile row on signup), with no personal data baked in.
+3. Copy `.env.example` to `.env.local` and fill in your project's URL/anon key.
+4. Deploy `supabase/functions/ai-assistant` (via the Supabase Dashboard's Edge Functions editor) and set its secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`.
+5. Configure Auth → SMTP Settings with your own email provider (the shared default sender has a very low rate limit) and require email confirmation under Auth → Settings.
+6. Sign up through the app once, then (optionally) run `scripts/seed-default-exercises.mjs` with your service role key to populate the shared exercise library, and grant yourself admin — see the commented block at the end of `supabase/schema.example.sql`.

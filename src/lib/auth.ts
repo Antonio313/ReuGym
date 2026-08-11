@@ -20,7 +20,7 @@ export type SignUpResult =
 export async function loadProfile(authUser: User): Promise<{ user: AuthUser; mustChangePassword: boolean }> {
   const { data, error } = await supabase
     .from('users')
-    .select('id, email, weight_unit, has_seen_onboarding, must_change_password')
+    .select('id, email, weight_unit, has_seen_onboarding, has_completed_setup, must_change_password')
     .eq('id', authUser.id)
     .single();
   if (error || !data) throw new Error('PROFILE_NOT_FOUND');
@@ -30,6 +30,7 @@ export async function loadProfile(authUser: User): Promise<{ user: AuthUser; mus
     email: data.email as string,
     weightUnit: (data.weight_unit as WeightUnit) ?? 'kg',
     hasSeenOnboarding: (data.has_seen_onboarding as boolean) ?? false,
+    hasCompletedSetup: (data.has_completed_setup as boolean) ?? false,
     isAdmin: authUser.app_metadata?.is_admin === true,
   };
   return { user, mustChangePassword: (data.must_change_password as boolean) ?? false };
@@ -62,10 +63,12 @@ export async function signUp(email: string, password: string): Promise<SignUpRes
   // avoids leaking which emails exist.
   if (!data.user || data.user.identities?.length === 0) throw new Error('ALREADY_EXISTS');
 
-  const { error: profileError } = await supabase
-    .from('users')
-    .insert({ id: data.user.id, email: trimmed });
-  if (profileError) throw new Error('SIGNUP_FAILED');
+  // The public.users profile row is created by the on_auth_user_created
+  // trigger (see 013_enable_rls.sql), not here. With email confirmation
+  // required, this signUp() call returns before a session exists, so an
+  // insert attempted from here would run unauthenticated and get rejected
+  // by RLS — the trigger runs server-side at row-creation time instead,
+  // sidestepping that timing problem entirely.
 
   return data.session ? { status: 'signed_in' } : { status: 'confirm_email' };
 }
@@ -117,4 +120,12 @@ export async function markOnboardingSeen(userId: string): Promise<void> {
   }
   await enqueueSync(userId, 'users', 'upsert', { id: userId, email: current?.email, has_seen_onboarding: true });
   await syncNow(userId);
+}
+
+// Gates the setup wizard (like setNewPassword, a direct awaited write, not
+// the offline queue — must be confirmed before the wizard releases the user
+// into the rest of the app).
+export async function markSetupComplete(userId: string): Promise<void> {
+  const { error } = await supabase.from('users').update({ has_completed_setup: true }).eq('id', userId);
+  if (error) throw new Error('SETUP_COMPLETE_FAILED');
 }

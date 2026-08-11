@@ -12,6 +12,7 @@ import {
   setNewPassword as authSetNewPassword,
   updateWeightUnit as authUpdateWeightUnit,
   markOnboardingSeen as authMarkOnboardingSeen,
+  markSetupComplete as authMarkSetupComplete,
   type AuthUser,
   type WeightUnit,
   type SignUpResult,
@@ -21,11 +22,13 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   needsPasswordReset: boolean;
+  needsSetup: boolean;
   signIn: (email: string, password: string) => Promise<void>;
   signUp: (email: string, password: string) => Promise<SignUpResult>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   completePasswordReset: (newPassword: string) => Promise<void>;
+  completeSetup: () => Promise<void>;
   setWeightUnit: (unit: WeightUnit) => Promise<void>;
   showOnboarding: boolean;
   openOnboarding: () => void;
@@ -38,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
   const [needsPasswordReset, setNeedsPasswordReset] = useState(false);
+  const [needsSetup, setNeedsSetup] = useState(false);
   const [showOnboarding, setShowOnboarding] = useState(false);
 
   // onAuthStateChange is the single source of truth for session state — it
@@ -52,6 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearLocalSession();
           setUser(null);
           setNeedsPasswordReset(false);
+          setNeedsSetup(false);
           setLoading(false);
           return;
         }
@@ -60,6 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setLocalSession(profileUser);
           setUser(profileUser);
           setNeedsPasswordReset(event === 'PASSWORD_RECOVERY' || mustChangePassword);
+          setNeedsSetup(!profileUser.hasCompletedSetup);
           if (!profileUser.hasSeenOnboarding) setShowOnboarding(true);
         } catch {
           // Profile row missing/unreachable — don't strand the user in a
@@ -68,6 +74,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           clearLocalSession();
           setUser(null);
           setNeedsPasswordReset(false);
+          setNeedsSetup(false);
         } finally {
           setLoading(false);
         }
@@ -89,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authSignOut();
     setUser(null);
     setNeedsPasswordReset(false);
+    setNeedsSetup(false);
     setShowOnboarding(false);
   };
 
@@ -96,6 +104,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) throw new Error('NOT_SIGNED_IN');
     await authSetNewPassword(user.id, newPassword);
     setNeedsPasswordReset(false);
+  };
+
+  const handleCompleteSetup = async (): Promise<void> => {
+    if (!user) throw new Error('NOT_SIGNED_IN');
+    await authMarkSetupComplete(user.id);
+    setUser((u) => (u ? { ...u, hasCompletedSetup: true } : u));
+    setNeedsSetup(false);
   };
 
   const handleSetWeightUnit = async (unit: WeightUnit): Promise<void> => {
@@ -120,11 +135,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         user,
         loading,
         needsPasswordReset,
+        needsSetup,
         signIn: handleSignIn,
         signUp: handleSignUp,
         signOut: handleSignOut,
         resetPassword: authResetPassword,
         completePasswordReset: handleCompletePasswordReset,
+        completeSetup: handleCompleteSetup,
         setWeightUnit: handleSetWeightUnit,
         showOnboarding,
         openOnboarding,

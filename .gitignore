@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# This project's private schema history — see supabase/schema.example.sql
+# for the generic, fork-friendly equivalent.
+supabase/migrations/

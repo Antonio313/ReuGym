@@ -19,6 +19,7 @@ import SignIn from '@/pages/SignIn';
 import SignUp from '@/pages/SignUp';
 import ForgotPassword from '@/pages/ForgotPassword';
 import SetPassword from '@/pages/SetPassword';
+import Setup from '@/pages/setup/Setup';
 
 function StretchEditRedirect() {
   const { id } = useParams<{ id: string }>();
@@ -26,7 +27,7 @@ function StretchEditRedirect() {
 }
 
 function AppRoutes() {
-  const { user, loading, needsPasswordReset } = useAuth();
+  const { user, loading, needsPasswordReset, needsSetup } = useAuth();
   const location = useLocation();
 
   if (loading) {
@@ -58,6 +59,19 @@ function AppRoutes() {
     return (
       <Routes>
         <Route path="*" element={<SetPassword />} />
+      </Routes>
+    );
+  }
+
+  // New (or explicitly-skipped-later) accounts go through the AI setup
+  // wizard before touching anything else — same full-route-tree takeover as
+  // needsPasswordReset above. Checked after it: a migrated account with a
+  // default password shouldn't be asked to set up a program before it even
+  // has a real password.
+  if (needsSetup) {
+    return (
+      <Routes>
+        <Route path="*" element={<Setup />} />
       </Routes>
     );
   }
