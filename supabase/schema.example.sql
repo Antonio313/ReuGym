@@ -4,7 +4,7 @@
 -- snapshot of the current schema (tables, RLS policies, storage bucket,
 -- auth trigger) with no personal data or account-specific seeding baked in.
 -- The actual numbered migrations this project runs against its live
--- database (supabase/migrations/001..013) aren't tracked in git — they're
+-- database (supabase/migrations/001..014) aren't tracked in git — they're
 -- this project's private history. If you're forking ReuGym for your own
 -- Supabase project, run this file once against a fresh project instead of
 -- trying to replay that history.
@@ -22,8 +22,15 @@
 
 -- ─── Tables ─────────────────────────────────────────────────────
 
+-- id references auth.users directly (not just "happens to equal" it) so
+-- deleting a user from Auth cascades to their profile row instead of
+-- leaving an orphan behind — an orphaned row here blocks any future signup
+-- with the same email, since it collides with the UNIQUE constraint below
+-- when the on_auth_user_created trigger (bottom of this file) tries to
+-- insert the new one. See migrations/014_users_fk_auth.sql for the
+-- incident this fixed.
 create table users (
-  id                    uuid primary key default gen_random_uuid(),
+  id                    uuid primary key references auth.users(id) on delete cascade,
   email                 text unique not null,
   created_at            timestamptz default now(),
   must_change_password  boolean not null default false,
