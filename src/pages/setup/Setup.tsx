@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { nanoid } from 'nanoid';
 import { CaretLeft } from '@phosphor-icons/react';
 import { useAuth } from '@/context/AuthContext';
@@ -7,7 +7,7 @@ import { useUnit } from '@/hooks/useUnit';
 import { supabase } from '@/lib/supabase';
 import { ReviewScreen } from './ReviewScreen';
 import {
-  EMPTY_FORM, SAFETY_FLAG_OPTIONS, generatePlan, applyPlan,
+  EMPTY_FORM, SAFETY_FLAG_OPTIONS, DAY_CATEGORY_OPTIONS, generatePlan, applyPlan,
   type SetupForm, type Experience, type BodyComp, type Location, type ProposedAction,
 } from './setupApi';
 
@@ -76,6 +76,60 @@ function NumberField({ label, value, onChange, placeholder }: { label: string; v
   );
 }
 
+// ─── Generating screen ────────────────────────────────────────────
+
+// There's no real progress signal from the edge function (one plain
+// request/response, not a stream) — this is a time-based approximation
+// calibrated off an observed real run (~150s for a full 4-day gym+home
+// plan), so the bar and message keep advancing instead of the screen
+// looking frozen for a couple of minutes. Caps below 100% and holds on the
+// last message rather than finishing early, since it's better to look
+// slightly behind than to look done and then sit there.
+const GENERATING_ESTIMATE_SECONDS = 150;
+const GENERATING_MESSAGES = [
+  'Reviewing your goals and stats…',
+  'Planning your training days…',
+  'Building gym and home versions…',
+  'Adding stretch routines…',
+  'Setting starting weights…',
+  'Finishing up…',
+];
+
+function GeneratingScreen() {
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    const id = setInterval(() => setElapsed((s) => s + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const progressPct = Math.min(92, (elapsed / GENERATING_ESTIMATE_SECONDS) * 92);
+  const stepSeconds = GENERATING_ESTIMATE_SECONDS / GENERATING_MESSAGES.length;
+  const messageIndex = Math.min(GENERATING_MESSAGES.length - 1, Math.floor(elapsed / stepSeconds));
+
+  return (
+    <div className="flex flex-col items-center justify-center gap-5 min-h-dvh px-6" style={{ background: 'var(--color-bg)' }}>
+      <span className="font-display tracking-widest" style={{ fontSize: 'var(--text-h1)', color: 'var(--color-text)' }}>
+        REUGYM
+      </span>
+      <div
+        style={{
+          width: '100%', maxWidth: 240, height: '4px',
+          background: 'var(--color-surface-2)', borderRadius: 'var(--radius-sm)', overflow: 'hidden',
+        }}
+      >
+        <div style={{ height: '100%', width: `${progressPct}%`, background: 'var(--color-accent)', transition: 'width 1s linear' }} />
+      </div>
+      <p className="font-body text-center" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+        {GENERATING_MESSAGES[messageIndex]}
+      </p>
+      <p className="font-body text-center" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
+        This can take a couple of minutes — building a full program with gym and home versions.
+      </p>
+    </div>
+  );
+}
+
 // ─── Wizard ─────────────────────────────────────────────────────
 
 type Phase = 'intake' | 'generating' | 'review' | 'error';
@@ -103,6 +157,7 @@ export default function Setup() {
       case 2: return form.experience != null;
       case 3: return form.bodyComp != null;
       case 6: return form.location != null;
+      case 7: return form.dayCategories.length > 0;
       default: return true;
     }
   })();
@@ -122,6 +177,11 @@ export default function Setup() {
       const result = await generatePlan(user.id, form, exercises, stretches);
       setReply(result.reply);
       setActions(result.proposedActions);
+      // Some day(s) can fail even after the edge function's own retries —
+      // still show whatever did come back rather than treating it as a
+      // hard failure, but flag what's missing via the same error slot the
+      // review screen already renders.
+      if (result.warnings.length > 0) setError(result.warnings.join(' '));
       setPhase('review');
 
       if (form.weightKg != null) {
@@ -163,20 +223,7 @@ export default function Setup() {
   // ── Generating / error states ───────────────────────────────
 
   if (phase === 'generating') {
-    return (
-      <div className="flex flex-col items-center justify-center gap-4 min-h-dvh px-6" style={{ background: 'var(--color-bg)' }}>
-        <span className="font-display tracking-widest" style={{ fontSize: 'var(--text-h1)', color: 'var(--color-text)' }}>
-          REUGYM
-        </span>
-        <div
-          className="w-6 h-6 rounded-full border-2 border-t-transparent animate-spin"
-          style={{ borderColor: 'var(--color-accent)', borderTopColor: 'transparent' }}
-        />
-        <p className="font-body text-center" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
-          Building your program — gym and home versions, based on your goals…
-        </p>
-      </div>
-    );
+    return <GeneratingScreen />;
   }
 
   if (phase === 'error') {
@@ -385,29 +432,34 @@ export default function Setup() {
         )}
 
         {step === 7 && (
-          <div className="flex flex-col gap-4">
-            <StepTitle>Days per week</StepTitle>
-            <div className="flex items-center justify-center gap-6 py-4">
-              <button
-                onClick={() => patch({ daysPerWeek: Math.max(2, form.daysPerWeek - 1) })}
-                disabled={form.daysPerWeek <= 2}
-                className="w-12 h-12 font-display"
-                style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)', border: 'var(--border-thin)', borderRadius: 'var(--radius-md)' }}
-              >
-                −
-              </button>
-              <span className="font-mono" data-numeric style={{ fontSize: 'var(--text-weight-large)', color: 'var(--color-text)' }}>
-                {form.daysPerWeek}
-              </span>
-              <button
-                onClick={() => patch({ daysPerWeek: Math.min(6, form.daysPerWeek + 1) })}
-                disabled={form.daysPerWeek >= 6}
-                className="w-12 h-12 font-display"
-                style={{ fontSize: 'var(--text-h2)', color: 'var(--color-text)', border: 'var(--border-thin)', borderRadius: 'var(--radius-md)' }}
-              >
-                +
-              </button>
-            </div>
+          <div className="flex flex-col gap-3">
+            <StepTitle>Which days?</StepTitle>
+            <p className="font-body mb-1" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text-muted)' }}>
+              Pick as many as you'll actually train — this sets your days per week too.
+            </p>
+            {DAY_CATEGORY_OPTIONS.map(({ category, label, focus }) => {
+              const active = form.dayCategories.includes(category);
+              return (
+                <ChoiceButton
+                  key={category}
+                  active={active}
+                  onClick={() => patch({
+                    dayCategories: active
+                      ? form.dayCategories.filter((c) => c !== category)
+                      : [...form.dayCategories, category],
+                  })}
+                >
+                  <div className="flex flex-col gap-0.5">
+                    <span className="font-display" style={{ fontSize: 'var(--text-body)', letterSpacing: '0.02em', color: active ? 'var(--color-accent)' : 'var(--color-text)' }}>
+                      {label}
+                    </span>
+                    <span className="font-body" style={{ fontSize: 'var(--text-micro)', color: 'var(--color-text-faint)' }}>
+                      {focus}
+                    </span>
+                  </div>
+                </ChoiceButton>
+              );
+            })}
           </div>
         )}
       </main>
