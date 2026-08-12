@@ -14,3 +14,7 @@ export function isRunningAsPWA(): boolean {
 export function isIOS(): boolean {
   return /iPad|iPhone|iPod/.test(navigator.userAgent);
 }
+
+export function isAndroid(): boolean {
+  return /Android/.test(navigator.userAgent);
+}

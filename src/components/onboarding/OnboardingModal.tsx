@@ -2,11 +2,11 @@ import { useState, type ReactNode } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   X, Barbell, DeviceMobile, ListPlus, Play, Sparkle, ChartLineUp, Export,
-  ShareNetwork, VideoCamera, CheckCircle, ArrowRight,
+  ShareNetwork, VideoCamera, CheckCircle, ArrowRight, DotsThreeVertical,
 } from '@phosphor-icons/react';
 import { useAuth } from '@/context/AuthContext';
 import { useInstallPrompt } from '@/hooks/useInstallPrompt';
-import { isIOS, isRunningAsPWA } from '@/lib/pwa';
+import { isIOS, isAndroid, isRunningAsPWA } from '@/lib/pwa';
 
 type Slide = {
   icon: ReactNode;
@@ -41,6 +41,21 @@ function Point({ title, children }: { title: string; children: ReactNode }) {
   );
 }
 
+function Step({ n, children }: { n: number; children: ReactNode }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span
+        className="font-mono flex items-center justify-center flex-shrink-0"
+        data-numeric
+        style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', background: 'var(--color-surface)', border: 'var(--border-thin)', fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}
+      >{n}</span>
+      <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}>
+        {children}
+      </p>
+    </div>
+  );
+}
+
 function InstallSlideBody() {
   const { canInstall, promptInstall } = useInstallPrompt();
 
@@ -61,37 +76,52 @@ function InstallSlideBody() {
           mid-workout if Safari reclaims the tab.
         </Body>
         <div className="flex flex-col gap-3">
-          <div className="flex items-center gap-3">
-            <span
-              className="font-mono flex items-center justify-center flex-shrink-0"
-              data-numeric
-              style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', background: 'var(--color-surface)', border: 'var(--border-thin)', fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}
-            >1</span>
-            <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}>
-              Tap the <ShareNetwork size={14} weight="bold" style={{ display: 'inline', verticalAlign: '-2px' }} /> Share icon in Safari's toolbar
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span
-              className="font-mono flex items-center justify-center flex-shrink-0"
-              data-numeric
-              style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', background: 'var(--color-surface)', border: 'var(--border-thin)', fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}
-            >2</span>
-            <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}>
-              Scroll down and tap <span style={{ color: 'var(--color-text-faint)' }}>"Add to Home Screen"</span>
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <span
-              className="font-mono flex items-center justify-center flex-shrink-0"
-              data-numeric
-              style={{ width: '1.75rem', height: '1.75rem', borderRadius: '50%', background: 'var(--color-surface)', border: 'var(--border-thin)', fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}
-            >3</span>
-            <p className="font-body" style={{ fontSize: 'var(--text-meta)', color: 'var(--color-text)' }}>
-              Tap <span style={{ color: 'var(--color-text-faint)' }}>"Add"</span> — launch it from your Home Screen from now on
-            </p>
-          </div>
+          <Step n={1}>
+            Tap the <ShareNetwork size={14} weight="bold" style={{ display: 'inline', verticalAlign: '-2px' }} /> Share icon in Safari's toolbar
+          </Step>
+          <Step n={2}>
+            Scroll down and tap <span style={{ color: 'var(--color-text-faint)' }}>"Add to Home Screen"</span>
+          </Step>
+          <Step n={3}>
+            Tap <span style={{ color: 'var(--color-text-faint)' }}>"Add"</span> — launch it from your Home Screen from now on
+          </Step>
         </div>
+      </div>
+    );
+  }
+
+  const installButton = (
+    <button
+      type="button"
+      onClick={() => void promptInstall()}
+      className="flex items-center justify-center gap-2 py-3 font-display uppercase tracking-wide"
+      style={{ fontSize: 'var(--text-body)', background: 'var(--color-accent)', color: '#fff', borderRadius: 'var(--radius-md)', border: 'none' }}
+    >
+      <DeviceMobile size={18} weight="bold" />
+      Install App
+    </button>
+  );
+
+  if (isAndroid()) {
+    return (
+      <div className="flex flex-col gap-4">
+        <Body>
+          Install ReuGym to your Home Screen — it launches full-screen, works offline, and won't lose your spot
+          mid-workout if Chrome reclaims the tab.
+        </Body>
+        {canInstall ? installButton : (
+          <div className="flex flex-col gap-3">
+            <Step n={1}>
+              Tap the <DotsThreeVertical size={14} weight="bold" style={{ display: 'inline', verticalAlign: '-2px' }} /> menu icon in Chrome's toolbar
+            </Step>
+            <Step n={2}>
+              Tap <span style={{ color: 'var(--color-text-faint)' }}>"Add to Home screen"</span> (or <span style={{ color: 'var(--color-text-faint)' }}>"Install app"</span>)
+            </Step>
+            <Step n={3}>
+              Tap <span style={{ color: 'var(--color-text-faint)' }}>"Install"</span> — launch it from your Home Screen from now on
+            </Step>
+          </div>
+        )}
       </div>
     );
   }
@@ -101,17 +131,7 @@ function InstallSlideBody() {
       <Body>
         Install ReuGym as an app — it launches full-screen, works offline, and won't lose your spot mid-workout.
       </Body>
-      {canInstall ? (
-        <button
-          type="button"
-          onClick={() => void promptInstall()}
-          className="flex items-center justify-center gap-2 py-3 font-display uppercase tracking-wide"
-          style={{ fontSize: 'var(--text-body)', background: 'var(--color-accent)', color: '#fff', borderRadius: 'var(--radius-md)', border: 'none' }}
-        >
-          <DeviceMobile size={18} weight="bold" />
-          Install App
-        </button>
-      ) : (
+      {canInstall ? installButton : (
         <Body>
           Look for an install icon in your browser's address bar, or open the browser menu and choose
           "Install ReuGym" / "Add to Home Screen."
