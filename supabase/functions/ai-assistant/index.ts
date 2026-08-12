@@ -342,6 +342,28 @@ async function executeActions(
 ): Promise<string[]> {
   const applied: string[] = [];
 
+  // Clears whichever templates/phases this plan actually touches before
+  // inserting the new set — otherwise re-running setup (e.g. "Redo
+  // AI-assisted setup" in Settings) would append on top of whatever's
+  // already there instead of replacing it, doubling up every exercise.
+  // Scoped tightly to exactly what this batch of actions is about to
+  // (re)build: a day outside this plan, or one whose planning failed and
+  // so contributed zero actions, is left completely untouched — nothing
+  // gets wiped for a day that didn't successfully regenerate.
+  const templateIdsToClear = new Set(
+    actions.filter(a => a.kind === 'add_to_template').map(a => a.templateId as string),
+  );
+  for (const templateId of templateIdsToClear) {
+    await db.from('template_exercises').delete().eq('user_id', userId).eq('template_id', templateId);
+  }
+  const stretchScopesToClear = new Set(
+    actions.filter(a => a.kind === 'add_stretch').map(a => `${a.templateId as string} ${a.phase as string}`),
+  );
+  for (const scope of stretchScopesToClear) {
+    const [templateId, phase] = scope.split(' ');
+    await db.from('template_stretches').delete().eq('user_id', userId).eq('template_id', templateId).eq('phase', phase);
+  }
+
   // Fetched once, not per action — a single wizard run can create a couple
   // dozen exercises across concurrently-planned days that can't see each
   // other's work (e.g. Pull and Back both inventing "Assisted Pull-Up"
