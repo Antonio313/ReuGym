@@ -202,6 +202,10 @@ function buildSystemPrompt(body: RequestBody): string {
   turn is a slow, costly round trip; a plan built in 3 large turns is exactly as correct as one built in 20 small
   ones, just much faster.
 - ALWAYS use exact ID strings from the exercise/stretch library. Never invent IDs.
+- Before creating anything new, check whether the library already has the same movement under a different name
+  (e.g. "Diamond Push-Up" and "Close-Grip Push-Up" are the same exercise) — reuse that exact ID rather than
+  creating a near-duplicate. New exercises get promoted into this shared library for every future user, so a
+  duplicate here isn't just wasted effort, it pollutes the library everyone else sees too.
 - If an exercise or stretch is not in the library, use create_custom_exercise to create it, then use the returned ID.
   create_custom_exercise only captures identity (name/category/type/muscles) — it does NOT set weight, rest,
   bodyweight, or timed. Those are configured per assignment when you call add_exercise_to_template /
@@ -319,12 +323,32 @@ async function callClaude(
 
 // ─── Execute confirmed actions ─────────────────────────────────────
 
+// Collapses whitespace/punctuation/case so "Diamond Push-Up", "diamond
+// push up", and "Diamond  Push-Ups" all compare equal. Doesn't (and isn't
+// meant to) catch a same-movement exercise under a genuinely different
+// name — that's the AI's own job, per the RULES in buildSystemPrompt. A
+// real semantic-similarity pipeline (embeddings + vector search) isn't
+// worth the added infrastructure at this library's scale (~100s of rows,
+// a handful of creations per wizard run) when the model already reasons
+// about exercise equivalence better than a similarity threshold would.
+function normalizeExerciseName(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 async function executeActions(
   actions: ProposedAction[],
   userId: string,
   db: ReturnType<typeof createClient>,
 ): Promise<string[]> {
   const applied: string[] = [];
+
+  // Fetched once, not per action — a single wizard run can create a couple
+  // dozen exercises across concurrently-planned days that can't see each
+  // other's work (e.g. Pull and Back both inventing "Assisted Pull-Up"
+  // independently), so this also catches duplicates *within* one batch as
+  // knownNames grows through the loop below.
+  const { data: existingDefaults } = await db.from('default_exercises').select('name');
+  const knownNames = new Set((existingDefaults ?? []).map((e: { name: string }) => normalizeExerciseName(e.name)));
 
   for (const action of actions) {
     try {
@@ -346,7 +370,33 @@ async function executeActions(
           video_url:          action.videoUrl ?? null,
           notes:              action.notes ?? null,
         });
-        if (!error) applied.push(action.label as string);
+        if (!error) {
+          applied.push(action.label as string);
+
+          // Promotes straight to the shared library — no admin review
+          // step. That's a deliberate choice to keep this simple; if the
+          // library starts accumulating messy entries, service-role
+          // cleanup (or dialing this back to a review queue) is still an
+          // option later.
+          const normalized = normalizeExerciseName(action.name as string);
+          if (!knownNames.has(normalized)) {
+            knownNames.add(normalized);
+            await db.from('default_exercises').upsert({
+              id:                action.id,
+              name:              action.name,
+              category:          action.category,
+              type:              action.exerciseType,
+              muscles:           action.muscles,
+              default_rep_range: null,
+              rest_seconds:      null,
+              is_bodyweight:     false,
+              is_cable:          false,
+              is_timed:          false,
+              is_stretch:        action.isStretch ?? false,
+              video_url:         action.videoUrl ?? null,
+            }, { onConflict: 'id' });
+          }
+        }
 
       } else if (action.kind === 'add_to_template') {
         const { data: ex } = await db.from('template_exercises')
